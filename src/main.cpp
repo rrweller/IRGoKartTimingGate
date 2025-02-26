@@ -6,10 +6,10 @@
 static const uint16_t N = 64;             // Number of samples in each capture
 static const double FS = 4000.0;          // Sampling rate (Hz)
 static const double FREQ = 490.0;         // Target frequency (Hz)
-static const double THRESHOLD = 160.0;   // Amplitude threshold (adjust experimentally)
+static const double THRESHOLD = 550.0;   // Amplitude threshold (adjust experimentally)
 
 // Pin assignments
-static const int PD_PIN      = A0;        // Photodiode amplifier output
+static const int PD_PIN      = A0;        // Photodiode amplifier input
 static const int LED_PIN     = 7;
 static const int LASER_PIN   = 3;         // Laser / IR LED drive, ~490 Hz by default PWM
 

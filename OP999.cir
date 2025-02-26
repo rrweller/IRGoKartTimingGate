@@ -1,0 +1,51 @@
+* OP999 from Optek SPICE Macro-model        
+* Description: Photodiode
+* Generic Desc: Silicon, PIN type
+* Developed by: P Rako
+* Revision History: 
+* 1.0 (8/2012) - PR - initial release
+* 1.1 (9/2012) - PR - add Optek to first line
+* 1.2 (9/2012) - PR - put new line before +
+* Copyright 2012 by Analog Devices, Inc.
+*
+* Refer to http://www.analog.com/Analog_Root/static/techSupport/designTools/spiceModels/license/spice_general.html 
+* for License Statement. Use of this model indicates your acceptance
+* of the terms and provisions in the License Statement.
+* 
+*
+* BEGIN Notes:
+* 
+* Not Modeled:
+* Temperature effects
+* Noise
+* 
+* Parameters modeled include:  
+* Junction capacitance over reverse bias
+* Rise/fall time
+* Accepts external parameter for sensitivity (Sensy)
+* Accepts external parameter for light spectrum (Spec)
+* END Notes
+*
+* Node Assignments
+*                         anode
+*                         |   cathode
+*                         |   |   light input as a voltage
+*                         |   |   |
+*                         |   |   |
+*                         |   |   |
+*                         |   |   |
+.SUBCKT OP999             A   C   P  PARAMS: Spec=1.0 Sensy=0.5
+* 
+*
+* OP999 from Optek 
+* A = Anode
+* C = Cathode
+* P = (light)Power as a voltage input
+Rdummy P 0 1G
+Rswt P LP 3.57k
+Cswt LP 0 1p
+DPD A C PhotoDet
+GPD C A TABLE {V(LP)* Spec * Sensy} (0,0) (1,1)
+.MODEL PhotoDet D IS=1n RS=0.1 N=1.986196 BV=60 IBV=0.1n
++ CJO=4p VJ=0.455536 M=0.418717 TT=500n ISR=6p NR=100
+.ends

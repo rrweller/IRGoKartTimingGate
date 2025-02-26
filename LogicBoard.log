@@ -1,111 +1,59 @@
 LTspice 24.1.4 for Windows
 Circuit: E:\IRGoKartTimingGate\LogicBoard.net
-Start Time: Sat Feb 22 16:26:51 2025
+Start Time: Wed Feb 26 20:38:21 2025
 solver = Normal
 Maximum thread count: 16
 tnom = 27
 temp = 27
 method = trap
-E:\IRGoKartTimingGate\LogicBoard.net(7): Limiting rise time to 0.0001.
-
-I1 N001 0 PULSE(6nA 0 0 0 0 .001 .002)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E:\IRGoKartTimingGate\LogicBoard.net(7): Limiting fall time to 0.0001.
-
-I1 N001 0 PULSE(6nA 0 0 0 0 .001 .002)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-WARNING: Node u1:52 is floating.
-WARNING: Node u1:89 is floating.
-
-Instance "u1:M4": Length shorter than recommended for a level 1 MOSFET.
-Instance "u1:M5": Length shorter than recommended for a level 1 MOSFET.
-Instance "u1:M19": Length shorter than recommended for a level 1 MOSFET.
-Instance "u1:M23": Length shorter than recommended for a level 1 MOSFET.
-Instance "u1:M58": Length shorter than recommended for a level 1 MOSFET.
-Instance "u1:M54": Length shorter than recommended for a level 1 MOSFET.
-Instance "u1:M55": Length shorter than recommended for a level 1 MOSFET.
-Instance "u1:M56": Length shorter than recommended for a level 1 MOSFET.
-Instance "u1:M57": Length shorter than recommended for a level 1 MOSFET.
-Instance "u1:M52": Length shorter than recommended for a level 1 MOSFET.
-Instance "u1:M53": Length shorter than recommended for a level 1 MOSFET.
-Early termination of direct N-R iteration.
 Direct Newton iteration failed to find .op point.  (Use ".option noopiter" to skip.)
 Starting Gmin stepping
 Gmin = 10
+Gmin = 1.07374
+Gmin = 0.115292
+Gmin = 0.0123794
+Gmin = 0.00132923
+Gmin = 0.000142725
+Gmin = 1.5325e-05
 vernier = 0.5
-Gmin = 1.86414
+Gmin = 2.85678e-06
 vernier = 0.25
 vernier = 0.125
 vernier = 0.0625
 vernier = 0.03125
-Gmin = 1.72749
-vernier = 0.015625
-vernier = 0.0078125
-vernier = 0.00390625
-Gmin = 1.70742
-vernier = 0.00195312
-vernier = 0.000976562
-vernier = 0.000488281
+Gmin = 2.20512e-06
+vernier = 0.0416667
+vernier = 0.0555555
+Gmin = 1.98467e-06
+vernier = 0.074074
+Gmin = 1.68234e-06
+vernier = 0.0987653
+vernier = 0.131687
+Gmin = 1.27669e-06
+vernier = 0.175583
+vernier = 0.23411
+Gmin = 8.25286e-07
+vernier = 0.312147
+Gmin = 4.18788e-07
+vernier = 0.416196
+vernier = 0.554928
+Gmin = 1.37524e-07
+vernier = 0.739903
+vernier = 0.986537
+Gmin = 2.46491e-08
+vernier = 1
+Gmin = 2.67537e-09
+Gmin = 2.87266e-10
+Gmin = 3.08449e-11
+Gmin = 3.31195e-12
+Gmin = 3.55618e-13
 Gmin = 0
-Gmin = 0
-Gmin stepping failed
+Gmin stepping succeeded in finding the operating point.
 
-Starting source stepping with srcstepmethod=0
-Source Step = 3.0303%
-Source Step = 33.3333%
-Source Step = 53.7879%
-Source Step = 61.3636%
-Source Step = 64.7727%
-Source Step = 66.6667%
-Source Step = 68.5606%
-Source Step = 70.4545%
-Source Step = 72.3485%
-vernier = 0.09375
-Source Step = 73.5795%
-Source Step = 74.2898%
-Source Step = 75%
-Source Step = 75.7102%
-Source Step = 76.4205%
-vernier = 0.0351562
-Source Step = 77.2372%
-Source Step = 78.3026%
-Source Step = 79.3679%
-Source Step = 80.4332%
-Source Step = 81.4986%
-vernier = 0.0527344
-Source Step = 82.6705%
-Source Step = 83.5094%
-Source Step = 83.9089%
-Source Step = 84.3084%
-Source Step = 84.7079%
-Source Step = 85.1074%
-vernier = 0.0197754
-Source Step = 85.5868%
-Source Step = 86.1861%
-Source Step = 86.7853%
-Source Step = 87.3846%
-Source Step = 87.9838%
-vernier = 0.0296631
-Source Step = 88.673%
-Source Step = 89.5719%
-Source Step = 90.4707%
-Source Step = 91.3696%
-Source Step = 92.2685%
-vernier = 0.0444946
-Source Step = 93.2573%
-Source Step = 94.6056%
-Source Step = 95.9539%
-Source Step = 97.3022%
-Source Step = 98.6506%
-vernier = 0.0667419
-Source Step = 100%
-Source stepping succeeded in finding the operating point.
-
-Total elapsed time: 2.230 seconds.
+Total elapsed time: 0.162 seconds.
 
 Files loaded:
 E:\IRGoKartTimingGate\LogicBoard.net
-C:\Users\Riley\AppData\Local\LTspice\lib\cmp\standard.dio
 E:\IRGoKartTimingGate\OPA2333.lib
-C:\Users\Riley\AppData\Local\LTspice\lib\sub\UniversalOpAmp1.lib
+C:\Users\Riley\Documents\LTspice\LM358.MOD
 
