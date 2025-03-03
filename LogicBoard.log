@@ -1,11 +1,30 @@
 LTspice 24.1.4 for Windows
 Circuit: E:\IRGoKartTimingGate\LogicBoard.net
-Start Time: Wed Feb 26 20:38:21 2025
+Start Time: Fri Feb 28 23:28:26 2025
 solver = Normal
 Maximum thread count: 16
 tnom = 27
 temp = 27
 method = trap
+E:\IRGoKartTimingGate\LogicBoard.net(3): Limiting rise time to 5e-05.
+
+I1 N003 0 PULSE(1uA 1.01uA 0 0 0 .0005 .001)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E:\IRGoKartTimingGate\LogicBoard.net(3): Limiting fall time to 5e-05.
+
+I1 N003 0 PULSE(1uA 1.01uA 0 0 0 .0005 .001)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Instance "u2:M4": Length shorter than recommended for a level 1 MOSFET.
+Instance "u2:M5": Length shorter than recommended for a level 1 MOSFET.
+Instance "u2:M19": Length shorter than recommended for a level 1 MOSFET.
+Instance "u2:M23": Length shorter than recommended for a level 1 MOSFET.
+Instance "u2:M58": Length shorter than recommended for a level 1 MOSFET.
+Instance "u2:M54": Length shorter than recommended for a level 1 MOSFET.
+Instance "u2:M55": Length shorter than recommended for a level 1 MOSFET.
+Instance "u2:M56": Length shorter than recommended for a level 1 MOSFET.
+Instance "u2:M57": Length shorter than recommended for a level 1 MOSFET.
+Instance "u2:M52": Length shorter than recommended for a level 1 MOSFET.
+Instance "u2:M53": Length shorter than recommended for a level 1 MOSFET.
 Direct Newton iteration failed to find .op point.  (Use ".option noopiter" to skip.)
 Starting Gmin stepping
 Gmin = 10
@@ -15,45 +34,232 @@ Gmin = 0.0123794
 Gmin = 0.00132923
 Gmin = 0.000142725
 Gmin = 1.5325e-05
+Gmin = 1.6455e-06
 vernier = 0.5
-Gmin = 2.85678e-06
+Gmin = 2.7607e-07
 vernier = 0.25
 vernier = 0.125
 vernier = 0.0625
 vernier = 0.03125
-Gmin = 2.20512e-06
-vernier = 0.0416667
-vernier = 0.0555555
-Gmin = 1.98467e-06
-vernier = 0.074074
-Gmin = 1.68234e-06
-vernier = 0.0987653
-vernier = 0.131687
-Gmin = 1.27669e-06
-vernier = 0.175583
-vernier = 0.23411
-Gmin = 8.25286e-07
-vernier = 0.312147
-Gmin = 4.18788e-07
-vernier = 0.416196
-vernier = 0.554928
-Gmin = 1.37524e-07
-vernier = 0.739903
-vernier = 0.986537
-Gmin = 2.46491e-08
-vernier = 1
-Gmin = 2.67537e-09
-Gmin = 2.87266e-10
-Gmin = 3.08449e-11
-Gmin = 3.31195e-12
-Gmin = 3.55618e-13
+vernier = 0.015625
+vernier = 0.0078125
+vernier = 0.00390625
+vernier = 0.00195312
+Gmin = 2.45395e-07
+vernier = 0.000976562
+vernier = 0.000488281
 Gmin = 0
-Gmin stepping succeeded in finding the operating point.
+Gmin stepping failed
 
-Total elapsed time: 0.162 seconds.
+Starting source stepping with srcstepmethod=0
+Source Step = 3.0303%
+Source Step = 33.3333%
+Source Step = 39.3939%
+Source Step = 41.2879%
+Source Step = 43.1818%
+Source Step = 45.0758%
+Source Step = 46.9697%
+vernier = 0.09375
+Source Step = 49.1477%
+Source Step = 50.0178%
+Source Step = 50.0621%
+Source Step = 50.1065%
+Source Step = 50.1509%
+Source Step = 50.1953%
+vernier = 0.00219727
+Source Step = 50.2419%
+Source Step = 50.3085%
+Source Step = 50.3751%
+Source Step = 50.4417%
+Source Step = 50.5083%
+Source Step = 50.5748%
+vernier = 0.0032959
+Source Step = 50.6747%
+Source Step = 50.7746%
+Source Step = 50.8745%
+Source Step = 50.9743%
+Source Step = 51.0742%
+vernier = 0.00494385
+Source Step = 51.219%
+Source Step = 51.3689%
+Source Step = 51.5187%
+Source Step = 51.6685%
+Source Step = 51.8183%
+vernier = 0.00741577
+Source Step = 52.028%
+Source Step = 52.2528%
+Source Step = 52.4775%
+Source Step = 52.7022%
+Source Step = 52.9269%
+vernier = 0.0111237
+Source Step = 53.2303%
+Source Step = 53.5674%
+Source Step = 53.9044%
+Source Step = 54.2415%
+Source Step = 54.5786%
+vernier = 0.0166855
+Source Step = 55.0168%
+Source Step = 55.5224%
+Source Step = 56.0281%
+Source Step = 56.5337%
+Source Step = 57.0393%
+vernier = 0.0250282
+Source Step = 57.6713%
+Source Step = 58.4298%
+Source Step = 59.1882%
+Source Step = 59.9466%
+Source Step = 60.705%
+vernier = 0.0375423
+Source Step = 61.6152%
+Source Step = 62.7528%
+Source Step = 63.8905%
+Source Step = 65.0281%
+Source Step = 66.1658%
+vernier = 0.0563135
+Source Step = 67.474%
+Source Step = 69.1805%
+Source Step = 70.887%
+Source Step = 72.5935%
+Source Step = 74.2999%
+vernier = 0.0844703
+Source Step = 76.177%
+Source Step = 78.7367%
+Source Step = 81.2965%
+Source Step = 83.8562%
+Source Step = 86.4159%
+vernier = 0.126705
+Source Step = 89.1036%
+Source Step = 92.9431%
+vernier = 0.0316764
+Source Step = 92.6072%
+Source Step = 92.6671%
+Source Step = 92.7271%
+Source Step = 92.7871%
+Source Step = 92.8471%
+Source Step = 92.9071%
+Source Step = 92.9671%
+Source Step = 93.0271%
+Source Step = 93.0871%
+Source Step = 93.1471%
+Source Step = 93.2071%
+Source Step = 93.2671%
+Source Step = 93.3271%
+Source Step = 93.3871%
+Source Step = 93.4471%
+Source Step = 93.507%
+Source Step = 93.567%
+Source Step = 93.627%
+Source Step = 93.687%
+Source Step = 93.747%
+Source Step = 93.807%
+Source Step = 93.867%
+Source Step = 93.927%
+Source Step = 93.987%
+Source Step = 94.047%
+Source Step = 94.107%
+Source Step = 94.167%
+Source Step = 94.227%
+Source Step = 94.287%
+Source Step = 94.3469%
+Source Step = 94.4069%
+Source Step = 94.4669%
+Source Step = 94.5269%
+Source Step = 94.5869%
+Source Step = 94.6469%
+Source Step = 94.7069%
+Source Step = 94.7669%
+Source Step = 94.8269%
+Source Step = 94.8869%
+Source Step = 94.9469%
+Source Step = 95.0069%
+Source Step = 95.0669%
+Source Step = 95.1269%
+Source Step = 95.1869%
+Source Step = 95.2468%
+Source Step = 95.3068%
+Source Step = 95.3668%
+Source Step = 95.4268%
+Source Step = 95.4868%
+Source Step = 95.5468%
+Source Step = 95.6068%
+Source Step = 95.6668%
+Source Step = 95.7268%
+Source Step = 95.7868%
+Source Step = 95.8468%
+Source Step = 95.9068%
+Source Step = 95.9668%
+Source Step = 96.0268%
+Source Step = 96.0867%
+Source Step = 96.1467%
+Source Step = 96.2067%
+Source Step = 96.2667%
+Source Step = 96.3267%
+Source Step = 96.3867%
+Source Step = 96.4467%
+Source Step = 96.5067%
+Source Step = 96.5667%
+Source Step = 96.6267%
+Source Step = 96.6867%
+Source Step = 96.7467%
+Source Step = 96.8067%
+Source Step = 96.8667%
+Source Step = 96.9267%
+Source Step = 96.9866%
+Source Step = 97.0466%
+Source Step = 97.1066%
+Source Step = 97.1666%
+Source Step = 97.2266%
+Source Step = 97.2866%
+Source Step = 97.3466%
+Source Step = 97.4066%
+Source Step = 97.4666%
+Source Step = 97.5266%
+Source Step = 97.5866%
+Source Step = 97.6466%
+Source Step = 97.7066%
+Source Step = 97.7666%
+Source Step = 97.8265%
+Source Step = 97.8865%
+Source Step = 97.9465%
+Source Step = 98.0065%
+Source Step = 98.0665%
+Source Step = 98.1265%
+Source Step = 98.1865%
+Source Step = 98.2465%
+Source Step = 98.3065%
+Source Step = 98.3665%
+Source Step = 98.4265%
+Source Step = 98.4865%
+Source Step = 98.5465%
+Source Step = 98.6065%
+Source Step = 98.6665%
+Source Step = 98.7264%
+Source Step = 98.7864%
+Source Step = 98.8464%
+Source Step = 98.9064%
+Source Step = 98.9664%
+Source Step = 99.0264%
+Source Step = 99.0864%
+Source Step = 99.1464%
+Source Step = 99.2064%
+Source Step = 99.2664%
+Source Step = 99.3264%
+Source Step = 99.3864%
+Source Step = 99.4464%
+Source Step = 99.5064%
+Source Step = 99.5663%
+Source Step = 99.6263%
+Source Step = 99.6863%
+Source Step = 99.7463%
+Source Step = 99.8063%
+vernier = 0.00296966
+Source Step = 99.8693%
+Source Step = 99.9593%
+Source stepping succeeded in finding the operating point.
+
+Total elapsed time: 7.168 seconds.
 
 Files loaded:
 E:\IRGoKartTimingGate\LogicBoard.net
 E:\IRGoKartTimingGate\OPA2333.lib
-C:\Users\Riley\Documents\LTspice\LM358.MOD
 
