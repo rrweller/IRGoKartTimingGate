@@ -1,6 +1,6 @@
 LTspice 24.1.4 for Windows
 Circuit: E:\IRGoKartTimingGate\LogicBoard.net
-Start Time: Fri Feb 28 23:28:26 2025
+Start Time: Sun Mar  9 12:13:24 2025
 solver = Normal
 Maximum thread count: 16
 tnom = 27
@@ -8,14 +8,14 @@ temp = 27
 method = trap
 E:\IRGoKartTimingGate\LogicBoard.net(3): Limiting rise time to 5e-05.
 
-I1 N003 0 PULSE(1uA 1.01uA 0 0 0 .0005 .001)
+I1 N004 0 PULSE(1uA 1.01uA 0 0 0 .0005 .001)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 E:\IRGoKartTimingGate\LogicBoard.net(3): Limiting fall time to 5e-05.
 
-I1 N003 0 PULSE(1uA 1.01uA 0 0 0 .0005 .001)
+I1 N004 0 PULSE(1uA 1.01uA 0 0 0 .0005 .001)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Instance "u2:M4": Length shorter than recommended for a level 1 MOSFET.
 Instance "u2:M5": Length shorter than recommended for a level 1 MOSFET.
+Instance "u2:M4": Length shorter than recommended for a level 1 MOSFET.
 Instance "u2:M19": Length shorter than recommended for a level 1 MOSFET.
 Instance "u2:M23": Length shorter than recommended for a level 1 MOSFET.
 Instance "u2:M58": Length shorter than recommended for a level 1 MOSFET.
@@ -253,11 +253,11 @@ Source Step = 99.6863%
 Source Step = 99.7463%
 Source Step = 99.8063%
 vernier = 0.00296966
-Source Step = 99.8693%
-Source Step = 99.9593%
+Source Step = 99.8843%
+Source Step = 99.9743%
 Source stepping succeeded in finding the operating point.
 
-Total elapsed time: 7.168 seconds.
+Total elapsed time: 10.944 seconds.
 
 Files loaded:
 E:\IRGoKartTimingGate\LogicBoard.net

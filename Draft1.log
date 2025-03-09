@@ -1,0 +1,24 @@
+LTspice 24.1.4 for Windows
+Circuit: E:\IRGoKartTimingGate\Draft1.net
+Start Time: Sat Mar  8 13:46:56 2025
+solver = Normal
+Maximum thread count: 16
+tnom = 27
+temp = 27
+method = trap
+E:\IRGoKartTimingGate\Draft1.net(6): Limiting rise time to 0.0001.
+
+V2 P002 0 PULSE(0 5V 0 0 0 0.001 .002)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E:\IRGoKartTimingGate\Draft1.net(6): Limiting fall time to 0.0001.
+
+V2 P002 0 PULSE(0 5V 0 0 0 0.001 .002)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Direct Newton iteration for .op point succeeded.
+Total elapsed time: 0.080 seconds.
+
+Files loaded:
+E:\IRGoKartTimingGate\Draft1.net
+C:\Users\Riley\AppData\Local\LTspice\lib\cmp\standard.dio
+C:\Users\Riley\AppData\Local\LTspice\lib\cmp\standard.bjt
+
