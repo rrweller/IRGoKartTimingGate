@@ -1,6 +1,6 @@
 LTspice 24.1.4 for Windows
 Circuit: E:\IRGoKartTimingGate\LogicBoard.net
-Start Time: Sun Mar  9 12:13:24 2025
+Start Time: Tue Apr 29 18:23:19 2025
 solver = Normal
 Maximum thread count: 16
 tnom = 27
@@ -8,12 +8,15 @@ temp = 27
 method = trap
 E:\IRGoKartTimingGate\LogicBoard.net(3): Limiting rise time to 5e-05.
 
-I1 N004 0 PULSE(1uA 1.01uA 0 0 0 .0005 .001)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+I1 N004 0 PULSE(5uA 5.5uA 0 0 0 .0005 .001)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 E:\IRGoKartTimingGate\LogicBoard.net(3): Limiting fall time to 5e-05.
 
-I1 N004 0 PULSE(1uA 1.01uA 0 0 0 .0005 .001)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+I1 N004 0 PULSE(5uA 5.5uA 0 0 0 .0005 .001)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+WARNING: Node u2:52 is floating.
+WARNING: Node u2:89 is floating.
+
 Instance "u2:M5": Length shorter than recommended for a level 1 MOSFET.
 Instance "u2:M4": Length shorter than recommended for a level 1 MOSFET.
 Instance "u2:M19": Length shorter than recommended for a level 1 MOSFET.
@@ -25,241 +28,83 @@ Instance "u2:M56": Length shorter than recommended for a level 1 MOSFET.
 Instance "u2:M57": Length shorter than recommended for a level 1 MOSFET.
 Instance "u2:M52": Length shorter than recommended for a level 1 MOSFET.
 Instance "u2:M53": Length shorter than recommended for a level 1 MOSFET.
+Early termination of direct N-R iteration.
 Direct Newton iteration failed to find .op point.  (Use ".option noopiter" to skip.)
 Starting Gmin stepping
 Gmin = 10
-Gmin = 1.07374
-Gmin = 0.115292
-Gmin = 0.0123794
-Gmin = 0.00132923
-Gmin = 0.000142725
-Gmin = 1.5325e-05
-Gmin = 1.6455e-06
 vernier = 0.5
-Gmin = 2.7607e-07
+Gmin = 1.86414
 vernier = 0.25
 vernier = 0.125
 vernier = 0.0625
 vernier = 0.03125
+Gmin = 1.72749
 vernier = 0.015625
 vernier = 0.0078125
 vernier = 0.00390625
+Gmin = 1.70742
 vernier = 0.00195312
-Gmin = 2.45395e-07
 vernier = 0.000976562
 vernier = 0.000488281
+Gmin = 0
 Gmin = 0
 Gmin stepping failed
 
 Starting source stepping with srcstepmethod=0
 Source Step = 3.0303%
 Source Step = 33.3333%
-Source Step = 39.3939%
-Source Step = 41.2879%
-Source Step = 43.1818%
-Source Step = 45.0758%
-Source Step = 46.9697%
+Source Step = 53.7879%
+Source Step = 61.3636%
+Source Step = 64.7727%
+Source Step = 66.6667%
+Source Step = 68.5606%
+Source Step = 70.4545%
+Source Step = 72.3485%
 vernier = 0.09375
-Source Step = 49.1477%
-Source Step = 50.0178%
-Source Step = 50.0621%
-Source Step = 50.1065%
-Source Step = 50.1509%
-Source Step = 50.1953%
-vernier = 0.00219727
-Source Step = 50.2419%
-Source Step = 50.3085%
-Source Step = 50.3751%
-Source Step = 50.4417%
-Source Step = 50.5083%
-Source Step = 50.5748%
-vernier = 0.0032959
-Source Step = 50.6747%
-Source Step = 50.7746%
-Source Step = 50.8745%
-Source Step = 50.9743%
-Source Step = 51.0742%
-vernier = 0.00494385
-Source Step = 51.219%
-Source Step = 51.3689%
-Source Step = 51.5187%
-Source Step = 51.6685%
-Source Step = 51.8183%
-vernier = 0.00741577
-Source Step = 52.028%
-Source Step = 52.2528%
-Source Step = 52.4775%
-Source Step = 52.7022%
-Source Step = 52.9269%
-vernier = 0.0111237
-Source Step = 53.2303%
-Source Step = 53.5674%
-Source Step = 53.9044%
-Source Step = 54.2415%
-Source Step = 54.5786%
-vernier = 0.0166855
-Source Step = 55.0168%
-Source Step = 55.5224%
-Source Step = 56.0281%
-Source Step = 56.5337%
-Source Step = 57.0393%
-vernier = 0.0250282
-Source Step = 57.6713%
-Source Step = 58.4298%
-Source Step = 59.1882%
-Source Step = 59.9466%
-Source Step = 60.705%
-vernier = 0.0375423
-Source Step = 61.6152%
-Source Step = 62.7528%
-Source Step = 63.8905%
-Source Step = 65.0281%
-Source Step = 66.1658%
-vernier = 0.0563135
-Source Step = 67.474%
-Source Step = 69.1805%
-Source Step = 70.887%
-Source Step = 72.5935%
-Source Step = 74.2999%
-vernier = 0.0844703
-Source Step = 76.177%
-Source Step = 78.7367%
-Source Step = 81.2965%
-Source Step = 83.8562%
-Source Step = 86.4159%
-vernier = 0.126705
-Source Step = 89.1036%
-Source Step = 92.9431%
-vernier = 0.0316764
-Source Step = 92.6072%
-Source Step = 92.6671%
-Source Step = 92.7271%
-Source Step = 92.7871%
-Source Step = 92.8471%
-Source Step = 92.9071%
-Source Step = 92.9671%
-Source Step = 93.0271%
-Source Step = 93.0871%
-Source Step = 93.1471%
-Source Step = 93.2071%
-Source Step = 93.2671%
-Source Step = 93.3271%
-Source Step = 93.3871%
-Source Step = 93.4471%
-Source Step = 93.507%
-Source Step = 93.567%
-Source Step = 93.627%
-Source Step = 93.687%
-Source Step = 93.747%
-Source Step = 93.807%
-Source Step = 93.867%
-Source Step = 93.927%
-Source Step = 93.987%
-Source Step = 94.047%
-Source Step = 94.107%
-Source Step = 94.167%
-Source Step = 94.227%
-Source Step = 94.287%
-Source Step = 94.3469%
-Source Step = 94.4069%
-Source Step = 94.4669%
-Source Step = 94.5269%
-Source Step = 94.5869%
-Source Step = 94.6469%
-Source Step = 94.7069%
-Source Step = 94.7669%
-Source Step = 94.8269%
-Source Step = 94.8869%
-Source Step = 94.9469%
-Source Step = 95.0069%
-Source Step = 95.0669%
-Source Step = 95.1269%
-Source Step = 95.1869%
-Source Step = 95.2468%
-Source Step = 95.3068%
-Source Step = 95.3668%
-Source Step = 95.4268%
-Source Step = 95.4868%
-Source Step = 95.5468%
-Source Step = 95.6068%
-Source Step = 95.6668%
-Source Step = 95.7268%
-Source Step = 95.7868%
-Source Step = 95.8468%
-Source Step = 95.9068%
-Source Step = 95.9668%
-Source Step = 96.0268%
-Source Step = 96.0867%
-Source Step = 96.1467%
-Source Step = 96.2067%
-Source Step = 96.2667%
-Source Step = 96.3267%
-Source Step = 96.3867%
-Source Step = 96.4467%
-Source Step = 96.5067%
-Source Step = 96.5667%
-Source Step = 96.6267%
-Source Step = 96.6867%
-Source Step = 96.7467%
-Source Step = 96.8067%
-Source Step = 96.8667%
-Source Step = 96.9267%
-Source Step = 96.9866%
-Source Step = 97.0466%
-Source Step = 97.1066%
-Source Step = 97.1666%
-Source Step = 97.2266%
-Source Step = 97.2866%
-Source Step = 97.3466%
-Source Step = 97.4066%
-Source Step = 97.4666%
-Source Step = 97.5266%
-Source Step = 97.5866%
-Source Step = 97.6466%
-Source Step = 97.7066%
-Source Step = 97.7666%
-Source Step = 97.8265%
-Source Step = 97.8865%
-Source Step = 97.9465%
-Source Step = 98.0065%
-Source Step = 98.0665%
-Source Step = 98.1265%
-Source Step = 98.1865%
-Source Step = 98.2465%
-Source Step = 98.3065%
-Source Step = 98.3665%
-Source Step = 98.4265%
-Source Step = 98.4865%
-Source Step = 98.5465%
-Source Step = 98.6065%
-Source Step = 98.6665%
-Source Step = 98.7264%
-Source Step = 98.7864%
-Source Step = 98.8464%
-Source Step = 98.9064%
-Source Step = 98.9664%
-Source Step = 99.0264%
-Source Step = 99.0864%
-Source Step = 99.1464%
-Source Step = 99.2064%
-Source Step = 99.2664%
-Source Step = 99.3264%
-Source Step = 99.3864%
-Source Step = 99.4464%
-Source Step = 99.5064%
-Source Step = 99.5663%
-Source Step = 99.6263%
-Source Step = 99.6863%
-Source Step = 99.7463%
-Source Step = 99.8063%
-vernier = 0.00296966
-Source Step = 99.8843%
-Source Step = 99.9743%
+Source Step = 73.5795%
+Source Step = 74.2898%
+Source Step = 75%
+Source Step = 75.7102%
+Source Step = 76.4205%
+vernier = 0.0351562
+Source Step = 77.2372%
+Source Step = 78.3026%
+Source Step = 79.3679%
+Source Step = 80.4332%
+Source Step = 81.4986%
+vernier = 0.0527344
+Source Step = 82.6705%
+Source Step = 83.5094%
+Source Step = 83.9089%
+Source Step = 84.3084%
+Source Step = 84.7079%
+Source Step = 85.1074%
+vernier = 0.0197754
+Source Step = 85.5868%
+Source Step = 86.1861%
+Source Step = 86.7853%
+Source Step = 87.3846%
+Source Step = 87.9838%
+vernier = 0.0296631
+Source Step = 88.673%
+Source Step = 89.5719%
+Source Step = 90.4707%
+Source Step = 91.3696%
+Source Step = 92.2685%
+vernier = 0.0444946
+Source Step = 93.2573%
+Source Step = 94.6056%
+Source Step = 95.9539%
+Source Step = 97.3022%
+Source Step = 98.6506%
+vernier = 0.0667419
+Source Step = 100%
 Source stepping succeeded in finding the operating point.
 
-Total elapsed time: 10.944 seconds.
+Total elapsed time: 2.305 seconds.
 
 Files loaded:
 E:\IRGoKartTimingGate\LogicBoard.net
 E:\IRGoKartTimingGate\OPA2333.lib
+C:\Users\Riley\AppData\Local\LTspice\lib\sub\UniversalOpAmp1.lib
 
