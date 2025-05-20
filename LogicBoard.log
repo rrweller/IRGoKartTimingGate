@@ -1,6 +1,6 @@
 LTspice 24.1.4 for Windows
 Circuit: E:\IRGoKartTimingGate\LogicBoard.net
-Start Time: Tue Apr 29 18:23:19 2025
+Start Time: Wed May  7 19:35:04 2025
 solver = Normal
 Maximum thread count: 16
 tnom = 27
@@ -8,11 +8,11 @@ temp = 27
 method = trap
 E:\IRGoKartTimingGate\LogicBoard.net(3): Limiting rise time to 5e-05.
 
-I1 N004 0 PULSE(5uA 5.5uA 0 0 0 .0005 .001)
+I1 N004 0 PULSE(10nA 20nA 0 0 0 .0005 .001)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 E:\IRGoKartTimingGate\LogicBoard.net(3): Limiting fall time to 5e-05.
 
-I1 N004 0 PULSE(5uA 5.5uA 0 0 0 .0005 .001)
+I1 N004 0 PULSE(10nA 20nA 0 0 0 .0005 .001)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 WARNING: Node u2:52 is floating.
 WARNING: Node u2:89 is floating.
@@ -101,7 +101,7 @@ vernier = 0.0667419
 Source Step = 100%
 Source stepping succeeded in finding the operating point.
 
-Total elapsed time: 2.305 seconds.
+Total elapsed time: 2.892 seconds.
 
 Files loaded:
 E:\IRGoKartTimingGate\LogicBoard.net

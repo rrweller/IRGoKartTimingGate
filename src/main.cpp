@@ -1,86 +1,89 @@
 #include <Arduino.h>
 
-/*** Arduino Nano 1kHz Laser PWM and Synchronous Detector ***/
+// ----------------------------------------
+// User Settings
+// ----------------------------------------
+static const uint16_t N = 64;             // Number of samples in each capture
+static const double FS = 4000.0;          // Sampling rate (Hz)
+static const double FREQ = 490.0;         // Target frequency (Hz)
+static const double THRESHOLD = 160.0;   // Amplitude threshold (adjust experimentally)
 
-// Pin assignments (Arduino Nano ATmega328P):
-const byte LASER_PIN = 3;      // OC0A pin, but we will toggle manually for precise phase
-const byte PHOTO_PIN = A0;     // analog input from photodiode amplifier output
+// Pin assignments
+static const int PD_PIN      = A0;        // Photodiode amplifier output
+static const int LED_PIN     = 7;
+static const int LASER_PIN   = 3;         // Laser / IR LED drive, ~490 Hz by default PWM
 
-// Detection parameters:
-const unsigned long HALF_PERIOD_US = 500;   // half cycle = 500 µs for 1kHz
-const int DETECTION_THRESHOLD = 5;          // threshold on averaged difference (in ADC units)
-const int AVERAGE_CYCLES = 100;             // number of cycles to average over for confidence
-
-// Variables for running average calculation:
-long cumulativeDifference = 0;
-int cycleCount = 0;
-bool signalDetected = false;
-int confidenceValue = 0;
+// We'll create lookup tables for the reference signals
+double cosRef[N];
+double sinRef[N];
 
 void setup() {
+  Serial.begin(9600);
+  pinMode(LED_PIN, OUTPUT);
   pinMode(LASER_PIN, OUTPUT);
-  digitalWrite(LASER_PIN, LOW);
-  analogReference(DEFAULT);  // using 5V as ADC reference
-  Serial.begin(115200);
-  Serial.println("Starting synchronous detection...");
+
+  // If we want a ~490 Hz drive, we can just do:
+  analogWrite(LASER_PIN, 127); 
+  // On many Arduinos, pin 3 uses a default PWM freq ~490 Hz.
+
+  // Precompute our reference sine and cosine for one "analysis window" of length N
+  // We want the reference at frequency = FREQ
+  //   angle[n] = 2*pi*(FREQ/FS)*n
+  for (uint16_t i = 0; i < N; i++) {
+    double angle = 2.0 * M_PI * (FREQ / FS) * (double)i;
+    cosRef[i] = cos(angle);
+    sinRef[i] = sin(angle);
+  }
+
+  Serial.println("Single-Frequency Lock-In Example");
+  Serial.print("N = "); Serial.println(N);
+  Serial.print("FS = "); Serial.println(FS);
+  Serial.print("Window Duration = "); 
+  Serial.print(1000.0 * (double)N / FS); 
+  Serial.println(" ms");
 }
 
 void loop() {
-  // 1. Turn laser ON
-  digitalWrite(LASER_PIN, HIGH);
-  unsigned long tStart = micros();
-  // Small delay to allow photodiode/amp to respond (choose ~half of half-period)
-  delayMicroseconds(200);  
-  // 2. Sample photodiode during laser ON
-  int readingOn = analogRead(PHOTO_PIN);
-  
-  // 3. Wait until half-period is completed (500 µs since tStart)
-  while (micros() - tStart < HALF_PERIOD_US) {
-    // busy-wait loop (could do nothing or a small NOP) 
-  }
-  // 4. Turn laser OFF
-  digitalWrite(LASER_PIN, LOW);
-  // 5. Wait ~200 µs for amp to settle after turning off
-  delayMicroseconds(200);
-  // 6. Sample photodiode during laser OFF
-  int readingOff = analogRead(PHOTO_PIN);
-  
-  // Calculate difference between ON and OFF readings
-  int diff = readingOn - readingOff;
-  
-  // 7. Accumulate for running average over AVERAGE_CYCLES cycles
-  cumulativeDifference += diff;
-  cycleCount++;
-  if (cycleCount >= AVERAGE_CYCLES) {
-    // Compute average difference over the last N cycles
-    float avgDiff = float(cumulativeDifference) / AVERAGE_CYCLES;
-    // Reset counters for next average window (optional; we could do a sliding window instead)
-    cumulativeDifference = 0;
-    cycleCount = 0;
-    
-    // 8. Determine detection flag and confidence
-    if (avgDiff > DETECTION_THRESHOLD) {
-      signalDetected = true;
-    } else {
-      signalDetected = false;
+  // 1) Collect N samples at FS
+  // We'll do a simple blocking approach, reading N samples in one window.
+  static const unsigned long microsPerSample = (unsigned long)(1000000.0 / FS);
+
+  double sumI = 0.0;  // In-phase accumulation
+  double sumQ = 0.0;  // Quadrature accumulation
+
+  for (uint16_t i = 0; i < N; i++) {
+    unsigned long tStart = micros();
+
+    // Read the photodiode signal: raw 0..1023
+    int adcVal = analogRead(PD_PIN);
+
+    // Convert to double. 
+    // In a real lock-in you might shift/scale, but let's keep it simple.
+    double x = (double)adcVal; 
+
+    // 2) Multiply by reference signals and accumulate
+    sumI += x * cosRef[i];
+    sumQ += x * sinRef[i];
+
+    // Wait until the sample period is done
+    while (micros() - tStart < microsPerSample) {
+      // do nothing
     }
-    confidenceValue = (int)avgDiff;  // use the average difference as a simple confidence metric
-    // Optionally, scale confidenceValue to 0-100 or 0-255 for output, or compute SNR, etc.
-    
-    // 9. Output results (here we print to serial; in practice this could set a digital output or send to PC)
-    Serial.print("avgDiff = ");
-    Serial.print(avgDiff, 2);
-    Serial.print(" -> Detected: ");
-    Serial.print(signalDetected ? "YES" : "no");
-    Serial.print(", Confidence = ");
-    Serial.println(confidenceValue);
   }
-  
-  // 10. Complete the second half-period timing (ensure total cycle ~1000 µs)
-  // Since we already waited 500 µs for first half, and did some work, calculate remaining time:
-  unsigned long tCycle = micros() - tStart;
-  if (tCycle < 2 * HALF_PERIOD_US) {
-    delayMicroseconds((2 * HALF_PERIOD_US) - tCycle);
-  }
-  // Loop repeats for next cycle
+
+  // 3) Compute amplitude
+  double amplitude = sqrt(sumI * sumI + sumQ * sumQ);
+
+  // 4) Compare to threshold & turn LED on/off
+  bool beamPresent = (amplitude > THRESHOLD);
+  digitalWrite(LED_PIN, beamPresent ? HIGH : LOW);
+
+  // 5) Print the amplitude for debugging
+  Serial.print("Amplitude: ");
+  Serial.print(amplitude);
+  Serial.print("  => beamPresent: ");
+  Serial.println(beamPresent ? "YES" : "NO");
+
+  // Small delay or none, depending on how often you want updates
+  delay(10);
 }
