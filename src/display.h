@@ -4,15 +4,15 @@
 #include <Arduino.h>
 
 namespace DisplayDriver {
+  void begin();
 
-  void begin();                                 // call from setup()
+  void showStrength(uint8_t percent);               // 0-100  (RED)
+  void showCurrentTime(unsigned long microsElapsed); // SS.t   (RED)
+  void showBestTime(unsigned int centis);           // SS.hh  (GREEN)
 
-  void showStrength(uint8_t percent);           // 0-100 on RED
-  void showCurrentTime(unsigned long micros);   // SS.t  on RED
-  void showBestTime(unsigned int centis);       // SS.hh on GREEN
-
-  void blankRedDigits();                        // blanks only the red 3
-  void blankAll();                              // blanks all 7 digits (optional)
+  void showReady(bool on);                          // --- blink on/off (RED)
+  void blankRedDigits();                            // blanks red only
+  void blankAll();                                  // blanks all digits
 }
 
 #endif

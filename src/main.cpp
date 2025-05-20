@@ -30,8 +30,11 @@ unsigned long lastLapUs       = 0;
 unsigned int  bestLapCentis   = 0;
 bool  bestLapSet = false;
 
-enum Mode { ALIGN, WAIT, RUNNING, FLASH };
+enum Mode { ALIGN, READY, WAIT, RUNNING, FLASH };
 Mode mode = ALIGN;
+
+unsigned long readyBlinkMs = 0;
+bool readyBlinkState = false;
 
 unsigned long lastDisplayMs = 0;
 unsigned long flashStartMs  = 0;
@@ -52,7 +55,7 @@ ISR(TIMER2_COMPB_vect)
 /* ---------- Setup ---------- */
 void setup()
 {
-  Serial.begin(115200);
+  Serial.begin(9600);
   DisplayDriver::begin();
 
   /* test 1.2 s (1200000 µs) with *plain* literal */
@@ -81,19 +84,57 @@ void loop()
   if (lv > (long)lockinPeak) lockinPeak = lv;           // cast to silence warning
   uint8_t strength = lockinPeak ? (lv * 100UL) / lockinPeak : 0;
 
-  /* -------------------- ALIGN -------------------- */
-  if (mode == ALIGN) {
+  /* ---------- ALIGN ---------- */
+  if(mode == ALIGN){
     DisplayDriver::showStrength(strength);
-    if (strength >= STARTUP_THRESHOLD_PERCENT) {
+    if(strength >= STARTUP_THRESHOLD_PERCENT){
       baselineLockin = lv;
-      breakThresh    = baselineLockin * (1.0 - BREAK_DROP_PERCENT/100.0);
-      restoreThresh  = baselineLockin * (1.0 - RESTORE_DROP_PERCENT/100.0);
-      mode           = WAIT;
-      Serial.println(F("Beam good – waiting for first lap"));
+      breakThresh   = baselineLockin*(1.0-BREAK_DROP_PERCENT/100.0);
+      restoreThresh = baselineLockin*(1.0-RESTORE_DROP_PERCENT/100.0);
+      mode          = READY;                // ← go to READY state
+      readyBlinkMs  = nowMs;
+      readyBlinkState=false;
+      Serial.println(F("Beam OK – READY (waiting for first pass)"));
     }
-    delay(80);
     return;
   }
+
+  /* ---------- READY (blink  ---  until first true break) ---------- */
+if (mode == READY) {
+
+  /* 1) blink “---” every 500 ms */
+  if (nowMs - readyBlinkMs >= 500) {
+    readyBlinkMs     = nowMs;
+    readyBlinkState  = !readyBlinkState;
+    DisplayDriver::showReady(readyBlinkState);
+  }
+
+  /* 2) Debounced first beam break */
+  if (nowMs - lastTransitionMs >= TRANSITION_DEBOUNCE_MS) {
+
+    /* a) look for drop below breakThresh to count as BROKEN */
+    if (beamPresent && lv < breakThresh) {
+      beamPresent       = false;
+      lastTransitionMs  = nowMs;
+      /* FIRST real crossing → start timer, go to RUNNING */
+      timingStarted     = true;
+      lastCrossMicros   = micros();
+      mode              = RUNNING;
+      DisplayDriver::showCurrentTime(0);   // show 0.0
+      Serial.println(F("► READY → RUNNING (first pass)"));
+    }
+
+    /* b) if you ever dipped, require restore above restoreThresh
+          before another try (typical when driver waves a hand)     */
+    else if (!beamPresent && lv > restoreThresh) {
+      beamPresent       = true;
+      lastTransitionMs  = nowMs;
+      Serial.println(F("(beam restored while READY)"));
+    }
+  }
+
+  return;        // stay inside READY until a real, debounced break
+}
 
   /* ---------- Debounced beam break ---------- */
   if (nowMs - lastTransitionMs >= TRANSITION_DEBOUNCE_MS) {

@@ -40,7 +40,7 @@ static const uint8_t GDIG[10]={
   GMASK(1,0,1,1,1,1,1,0), GMASK(1,1,1,0,0,0,0,0),
   GMASK(1,1,1,1,1,1,1,0), GMASK(1,1,1,1,0,1,1,0)
 };
-
+static const uint8_t RDASH      = RMASK(0,0,0,0,0,0,1,0);   // segment-G only, for ready mode
 static const uint8_t SEG_BLANK = 0;
 
 /* ---------- persistent frame buffer ---------- */
@@ -76,6 +76,12 @@ void showStrength(uint8_t pct)
   frame[RED0]= (h?RDIG[h]:SEG_BLANK);
   frame[RED1]= (h?RDIG[t]:(t?RDIG[t]:SEG_BLANK));
   frame[RED2]= RDIG[o];
+  pushFrame();
+}
+
+void showReady(bool on)
+{
+  frame[RED0]=frame[RED1]=frame[RED2]= (on? RDASH : SEG_BLANK);
   pushFrame();
 }
 
