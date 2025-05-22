@@ -11,6 +11,7 @@ namespace DisplayDriver {
   void showBestTime(unsigned int centis);           // SS.hh  (GREEN)
 
   void showReady(bool on);                          // --- blink on/off (RED)
+  void showBanner(const char txt[3]);               // --- show 3 letters
   void blankRedDigits();                            // blanks red only
   void blankAll();                                  // blanks all digits
 }

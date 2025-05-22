@@ -25,6 +25,8 @@ enum DigitIdx { RED0=0, RED1, RED2, GREEN0, GREEN1, GREEN2, GREEN3 };
   ((a?1<<G_A:0)|(b?1<<G_B:0)|(c?1<<G_C:0)|(d?1<<G_D:0)| \
    (e?1<<G_E:0)|(f?1<<G_F:0)|(g?1<<G_G:0)|(dp?1<<G_DP:0))
 
+static const uint8_t SEG_BLANK = 0;
+
 /* digit tables (DP off) */
 static const uint8_t RDIG[10]={
   RMASK(1,1,1,1,1,1,0,0), RMASK(0,1,1,0,0,0,0,0),
@@ -40,8 +42,21 @@ static const uint8_t GDIG[10]={
   GMASK(1,0,1,1,1,1,1,0), GMASK(1,1,1,0,0,0,0,0),
   GMASK(1,1,1,1,1,1,1,0), GMASK(1,1,1,1,0,1,1,0)
 };
+/* letter patterns we actually need (A,L,N,R,D,Y,E) */
+static uint8_t letter(char c)
+{
+  switch(c) {
+    case 'A': return RMASK(1,1,1,0,1,1,1,0);
+    case 'L': return RMASK(0,0,0,1,1,1,0,0);
+    case 'N': return RMASK(1,1,1,0,1,1,0,0);
+    case 'R': return RMASK(0,0,0,0,1,0,1,0);
+    case 'D': return RMASK(0,1,1,1,1,0,1,0);
+    case 'Y': return RMASK(0,1,1,1,0,1,1,0);
+    case 'E': return RMASK(1,0,0,1,1,1,1,0);
+    default : return SEG_BLANK;
+  }
+}
 static const uint8_t RDASH      = RMASK(0,0,0,0,0,0,1,0);   // segment-G only, for ready mode
-static const uint8_t SEG_BLANK = 0;
 
 /* ---------- persistent frame buffer ---------- */
 static uint8_t frame[7] = { SEG_BLANK,SEG_BLANK,SEG_BLANK,
@@ -110,6 +125,14 @@ void showBestTime(unsigned int centis)
   frame[GREEN1]= GDIG[ones] | (1<<G_DP);
   frame[GREEN2]= GDIG[h1];
   frame[GREEN3]= GDIG[h2];
+  pushFrame();
+}
+
+void showBanner(const char txt[3])
+{
+  frame[RED0] = letter(txt[0]);
+  frame[RED1] = letter(txt[1]);
+  frame[RED2] = letter(txt[2]);
   pushFrame();
 }
 

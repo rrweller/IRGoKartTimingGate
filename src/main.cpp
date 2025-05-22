@@ -19,7 +19,7 @@ constexpr unsigned long ALIGN_HOLD_MS = 10000;   // 10-s stable window
 /* ────────── Signal-to-percent mapping ──────────
    lv → Vpp = (lv / 64) * 5/1023  (see ISR note)
    then map [DEADZONE_VPP .. FULL_SCALE_VPP] → [0..100] with power law  */
-constexpr float DEADZONE_VPP   = 0.005f;   // 5 mV ≈ no light
+constexpr float DEADZONE_VPP   = 0.0055f;   // 5 mV ≈ no light
 constexpr float FULL_SCALE_VPP = 0.20f;    // 0.20 Vpp ≈ strong return
 constexpr float POWER_EXP      = 0.20f;    // ¼-power curve emphasises low end
 
@@ -40,19 +40,21 @@ bool         bestLapSeen = false;
 
 /* ───────── Lap timeout ───────── */
 constexpr unsigned long MAX_LAP_US = 100000000UL; // 100 s → reset
-constexpr unsigned long MIN_LAP_US = 1000000UL;
+constexpr unsigned long MIN_LAP_US = 5000000UL;
+constexpr unsigned long BROKEN_TIMEOUT_MS = 5000;
 
 /* UI state */
-enum class State { ALIGN, READY, RUNNING, FLASH };
+enum class State { ALIGN, READY, RUNNING, FLASH, ERROR };
 State state = State::ALIGN;
 
 unsigned long tReadyBlink = 0;
 bool          readyOn     = false;
-
+unsigned long tStateEntry = 0;
 unsigned long tLastDisp   = 0;
 unsigned long tFlashStart = 0;
 unsigned long tFlashToggle= 0;
 unsigned long tLastDebounce=0;
+unsigned long tBrokenStart = 0;
 
 /* ────────── ISR: quadrature lock-in ────────── */
 ISR(TIMER2_COMPB_vect)
@@ -118,6 +120,10 @@ void loop()
   switch (state) {
     /* ---------- ALIGN ---------- */
     case State::ALIGN:
+      if (nowMs - tStateEntry < 2000) {      // first second → “ALN”
+          DisplayDriver::showBanner("ALN");
+          return;
+      }
       DisplayDriver::showStrength(pct);
       delay(100);
       if (pct >= STARTUP_MIN_STRENGTH) {          // strong enough now
@@ -128,8 +134,11 @@ void loop()
               breakThresh   = lv * (1.0 - BREAK_DROP_PERCENT/100.0);
               restoreThresh = lv * (1.0 - RESTORE_HYST_PERCENT/100.0);
               state         = State::READY;
+              tStateEntry = nowMs;
               tReadyBlink   = nowMs;
               readyOn       = false;
+              beamPresent   = true;
+              tBrokenStart = 0;
               Serial.println(F("Beam stable – READY (waiting for first pass)"));
           }
       } else {
@@ -139,6 +148,10 @@ void loop()
 
     /* ---------- READY ---------- */
     case State::READY:
+      if (nowMs - tStateEntry < 2000) {      // one-second “RDY”
+          DisplayDriver::showBanner("RDY");
+          return;
+      }
       if (nowMs - tReadyBlink >= 500) {
         tReadyBlink = nowMs;
         readyOn = !readyOn;
@@ -153,9 +166,23 @@ void loop()
           lastCrossUs   = micros();
           DisplayDriver::showCurrentTime(0);
           state = State::RUNNING;
+          tStateEntry = nowMs;
           Serial.println(F("► Timer START"));
         }
       }
+      return;
+
+    /* ---------- ERROR ---------- */
+    case State::ERROR:
+      delay(5000);
+      state = State::ALIGN;
+      tStateEntry = nowMs;
+      DisplayDriver::blankAll(); 
+      bestLapCs = 0; 
+      bestLapSeen = false;
+      timingStarted = false;
+      tAlignHoldStart = 0;
+      tBrokenStart = 0;
       return;
 
     /* ---------- RUNNING / FLASH shared break-detect ---------- */
@@ -164,6 +191,7 @@ void loop()
         if (beamPresent && lv < breakThresh) {
           beamPresent     = false;
           tLastDebounce   = nowMs;
+          tBrokenStart = nowMs;
 
           unsigned long nowUs = micros();
           unsigned long lapUs = nowUs - lastCrossUs;
@@ -192,12 +220,14 @@ void loop()
                   tFlashStart  = nowMs;
                   tFlashToggle = nowMs;
                   state        = State::FLASH;
+                  tStateEntry = nowMs;
                   DisplayDriver::showCurrentTime(lapUs);
               }
               else if (state == State::READY) {             // first pass
                   timingStarted = true;
                   DisplayDriver::showCurrentTime(0);
                   state = State::RUNNING;
+                  tStateEntry = nowMs;
                   Serial.println(F("► Timer START"));
               }
           }
@@ -205,6 +235,15 @@ void loop()
         else if (!beamPresent && lv > restoreThresh) {
           beamPresent = true;
           tLastDebounce = nowMs;
+          tBrokenStart = 0;
+        }
+        /* beam lost too long → ERROR banner */
+        if (!beamPresent && tBrokenStart &&
+            nowMs - tBrokenStart >= BROKEN_TIMEOUT_MS &&
+            (state == State::RUNNING || state == State::FLASH)) {
+            DisplayDriver::showBanner("ERR");
+            state         = State::ERROR;
+            Serial.println(F("Beam lost – ERR state"));
         }
       }
       break;
@@ -215,13 +254,15 @@ void loop()
     /* lap timeout: no break for 100 s */
     if (micros() - lastCrossUs >= MAX_LAP_US) {
         Serial.println(F("‼ 100-s timeout – returning to ALIGN"));
+        delay(2500);
         state = State::ALIGN;
+        tStateEntry = nowMs;
         DisplayDriver::blankAll(); 
         bestLapCs = 0; 
-        bestLapSeen = false;                    // keep best, but require new lap
+        bestLapSeen = false;
         timingStarted = false;
-        tAlignHoldStart = 0;                    // restart stability timer
-        delay(2500);
+        tAlignHoldStart = 0;
+        tBrokenStart = 0;
         return;
     }
 
@@ -236,6 +277,7 @@ void loop()
   if (state == State::FLASH) {
     if (nowMs - tFlashStart >= FLASH_DURATION_MS) {
       state = State::RUNNING;
+      tStateEntry = nowMs;
       tLastDisp = nowMs;
     } else if (nowMs - tFlashToggle >= 500) {
       tFlashToggle = nowMs;
