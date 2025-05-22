@@ -120,17 +120,15 @@ void loop()
   switch (state) {
     /* ---------- ALIGN ---------- */
     case State::ALIGN:
-      if (nowMs - tStateEntry < 2000) {      // first second → “ALN”
+      if (nowMs - tStateEntry < 2000) {
           DisplayDriver::showBanner("ALN");
           return;
       }
       DisplayDriver::showStrength(pct);
-      delay(100);
-      if (pct >= STARTUP_MIN_STRENGTH) {          // strong enough now
-          if (tAlignHoldStart == 0)               // start 10-s timer
+      if (pct >= STARTUP_MIN_STRENGTH) {
+          if (tAlignHoldStart == 0)          // start 10-s timer
               tAlignHoldStart = nowMs;
           else if (nowMs - tAlignHoldStart >= ALIGN_HOLD_MS) {
-              /* held ≥10 s → lock thresholds & enter READY */
               breakThresh   = lv * (1.0 - BREAK_DROP_PERCENT/100.0);
               restoreThresh = lv * (1.0 - RESTORE_HYST_PERCENT/100.0);
               state         = State::READY;
