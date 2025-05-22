@@ -10,9 +10,13 @@ const unsigned long DISPLAY_REFRESH_MS   = 100;    // 10 Hz
 const unsigned long LAP_DISPLAY_FLASH_MS = 5000;   // 5 s flash
 
 /* ------------- Thresholds ------------- */
-const uint8_t STARTUP_THRESHOLD_PERCENT = 80;
+const uint8_t STARTUP_THRESHOLD_PERCENT = 105;
 const float   BREAK_DROP_PERCENT        = 30.0;
 const float   RESTORE_DROP_PERCENT      = 15.0;
+
+/* ---------- signal-print helpers ---------- */
+unsigned long lastStrengthPrintMs = 0;
+const float    POWER_EXP          = 0.50f;   // √(linear %)  -> perceptual curve
 
 /* ------------- Globals ------------- */
 volatile long lockinValue = 0;
@@ -84,9 +88,28 @@ void loop()
   if (lv > (long)lockinPeak) lockinPeak = lv;           // cast to silence warning
   uint8_t strength = lockinPeak ? (lv * 100UL) / lockinPeak : 0;
 
+  /* --- Serial debug every 200 ms --------------------------------- */
+  if (nowMs - lastStrengthPrintMs >= 200) {
+      lastStrengthPrintMs = nowMs;
+
+      /* convert lock-in → peak-to-peak ADC counts → volts             */
+      float countsPP = lv / 64.0f;                      // see text
+      float voltsPP  = countsPP * 5.0f / 1023.0f;       // Vpp
+
+      /* perceptual power-law (sqrt) percentage                       */
+      float ratio    = lockinPeak ? (float)lv / (float)lockinPeak : 0.0f;
+      float percent  = 100.0f * sqrtf(ratio);           // x^0.5
+
+      Serial.print(F("LockIn="));  Serial.print(lv);
+      Serial.print(F("  Vpp="));   Serial.print(voltsPP, 3);
+      Serial.print(F(" V  Strength=")); Serial.print(percent, 1);
+      Serial.println(F(" % (sqrt)"));
+  }
+
   /* ---------- ALIGN ---------- */
   if(mode == ALIGN){
     DisplayDriver::showStrength(strength);
+    delay(50);
     if(strength >= STARTUP_THRESHOLD_PERCENT){
       baselineLockin = lv;
       breakThresh   = baselineLockin*(1.0-BREAK_DROP_PERCENT/100.0);
