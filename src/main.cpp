@@ -1,227 +1,248 @@
 #include <Arduino.h>
 #include "display.h"
 
-/* ------------- Hardware pins ------------- */
-const uint8_t LASER_PWM_PIN = 3;
-const uint8_t IR_SENSOR_PIN = A0;
+/* ────────── Hardware ────────── */
+constexpr uint8_t LASER_PWM_PIN = 3;     // drives IR laser (Timer-2 PWM)
+constexpr uint8_t IR_SENSOR_PIN = A0;    // TIA output into ADC
 
-/* ------------- Timing constants ------------- */
-const unsigned long DISPLAY_REFRESH_MS   = 100;    // 10 Hz
-const unsigned long LAP_DISPLAY_FLASH_MS = 5000;   // 5 s flash
+/* ────────── UI timing ────────── */
+constexpr unsigned long DISP_REFRESH_MS   = 100;   // update red every 0.1 s
+constexpr unsigned long FLASH_DURATION_MS = 5000;  // freeze last-lap for 5 s
 
-/* ------------- Thresholds ------------- */
-const uint8_t STARTUP_THRESHOLD_PERCENT = 50;
-const float   BREAK_DROP_PERCENT        = 10.0;
-const float   RESTORE_DROP_PERCENT      = 15.0;
+/* ────────── Alignment thresholds ────────── */
+constexpr uint8_t STARTUP_MIN_STRENGTH = 50;   // % needed to leave ALIGN
+constexpr float   BREAK_DROP_PERCENT   = 10.0; // % drop ⇒ beam broken
+constexpr float   RESTORE_HYST_PERCENT = 15.0; // % gap to declare restored
+unsigned long tAlignHoldStart = 0;
+constexpr unsigned long ALIGN_HOLD_MS = 10000;   // 10-s stable window
 
-/* ---------- signal → percent parameters ---------- */
-const float DEADZONE_VPP   = 0.005f;   // anything below this = 0 %
-const float FULL_SCALE_VPP = 0.2f;     // 100 % when rails clip
-float       POWER_EXP      = 0.25f;    // 0.50 = sqrt, 0.33 = cube-root, etc.
+/* ────────── Signal-to-percent mapping ──────────
+   lv → Vpp = (lv / 64) * 5/1023  (see ISR note)
+   then map [DEADZONE_VPP .. FULL_SCALE_VPP] → [0..100] with power law  */
+constexpr float DEADZONE_VPP   = 0.005f;   // 5 mV ≈ no light
+constexpr float FULL_SCALE_VPP = 0.20f;    // 0.20 Vpp ≈ strong return
+constexpr float POWER_EXP      = 0.20f;    // ¼-power curve emphasises low end
 
-/* ---------- signal-print helpers ---------- */
-unsigned long lastStrengthPrintMs = 0;
+/* ────────── Globals ────────── */
+volatile long lockIn = 0;          // running correlation accumulator
+volatile bool phase  = 0;          // toggles each PWM half-cycle
 
-/* ------------- Globals ------------- */
-volatile long lockinValue = 0;
-volatile bool phaseFlag   = 0;
+long   breakThresh  = 0;           // lv below ⇒ beam broken
+long   restoreThresh= 0;           // lv above ⇒ beam restored
+bool   beamPresent  = true;
 
-unsigned long lockinPeak     = 100;   // **made unsigned long so signed/unsigned compare warning disappears**
-unsigned long baselineLockin = 0;
-long  breakThresh            = 0;
-long  restoreThresh          = 0;
+bool   timingStarted = false;
+unsigned long lastCrossUs = 0;     // micros at previous beam break
+unsigned long lastLapUs   = 0;     // for flashing
 
-bool  beamPresent   = true;
-bool  timingStarted = false;
-unsigned long lastCrossMicros = 0;
-unsigned long lastLapUs       = 0;
-unsigned int  bestLapCentis   = 0;
-bool  bestLapSet = false;
+unsigned int bestLapCs   = 0;      // best lap in centiseconds
+bool         bestLapSeen = false;
 
-enum Mode { ALIGN, READY, WAIT, RUNNING, FLASH };
-Mode mode = ALIGN;
+/* ───────── Lap timeout ───────── */
+constexpr unsigned long MAX_LAP_US = 100000000UL; // 100 s → reset
+constexpr unsigned long MIN_LAP_US = 1000000UL;
 
-unsigned long readyBlinkMs = 0;
-bool readyBlinkState = false;
+/* UI state */
+enum class State { ALIGN, READY, RUNNING, FLASH };
+State state = State::ALIGN;
 
-unsigned long lastDisplayMs = 0;
-unsigned long flashStartMs  = 0;
-unsigned long flashToggleMs = 0;
+unsigned long tReadyBlink = 0;
+bool          readyOn     = false;
 
-static unsigned long lastTransitionMs = 0;
-const  unsigned long TRANSITION_DEBOUNCE_MS = 50;
+unsigned long tLastDisp   = 0;
+unsigned long tFlashStart = 0;
+unsigned long tFlashToggle= 0;
+unsigned long tLastDebounce=0;
 
-/* ---------- Lock-in ISR ---------- */
+/* ────────── ISR: quadrature lock-in ────────── */
 ISR(TIMER2_COMPB_vect)
 {
-  int v = analogRead(IR_SENSOR_PIN) - 512;
-  lockinValue += phaseFlag ? -v :  v;
-  lockinValue -= lockinValue >> 6;      // leakage
-  phaseFlag = !phaseFlag;
+  int sample = analogRead(IR_SENSOR_PIN) - 512;     // centre at 0
+  lockIn += phase ? -sample : sample;               // + / – correlate
+  lockIn -= lockIn >> 6;                            // 1/64 leakage
+  phase = !phase;
 }
 
-/* ---------- Setup ---------- */
+/* ────────── Helpers ────────── */
+inline float voltsPP(long lv)  { return (lv/64.0f) * 5.0f / 1023.0f; }
+
+uint8_t signalPercent(long lv)
+{
+  float vpp = voltsPP(lv);
+  float u   = vpp - DEADZONE_VPP;
+  if (u < 0) u = 0;
+  float lin = u / (FULL_SCALE_VPP - DEADZONE_VPP);
+  if (lin > 1) lin = 1;
+  return (uint8_t)(100.0f * powf(lin, POWER_EXP) + 0.5f);
+}
+
+/* ────────── Setup ────────── */
 void setup()
 {
   Serial.begin(9600);
   DisplayDriver::begin();
 
-  /* test 1.2 s (1200000 µs) with *plain* literal */
-  DisplayDriver::showCurrentTime(1200000UL);
-  delay(2000);
-
+  /* quick power-on demo */
+  DisplayDriver::showCurrentTime(888888888UL);
+  delay(1500);
   DisplayDriver::showStrength(0);
 
+  /* laser PWM: Timer-2, D3, 490 Hz @ 50 % */
   pinMode(LASER_PWM_PIN, OUTPUT);
-  analogWrite(LASER_PWM_PIN, 128);      // 490 Hz, 50 %
-  bitSet(TIMSK2, OCIE2B);
+  analogWrite(LASER_PWM_PIN, 128);
+  bitSet(TIMSK2, OCIE2B);          // enable ISR
 
-  Serial.println(F("ALIGN mode – raise to ≥80 %"));
+  Serial.println(F("ALIGN mode – aim for ≥50 %"));
 }
 
-/* ---------- Loop ---------- */
+/* ────────── Main loop ────────── */
 void loop()
 {
+  /* snapshot & convert signal */
+  noInterrupts();
+    long lv = (lockIn < 0) ? -lockIn : lockIn;
+  interrupts();
+  uint8_t pct = signalPercent(lv);
   unsigned long nowMs = millis();
 
-  /* --- lock-in read --- */
-  noInterrupts();
-  long lv = lockinValue;
-  interrupts();
-  /* ---- convert lock-in sum → absolute Vpp ----
-   lv ≈ 64 × (VINon − VINoff)
-   countsPP = lv / 64  (ADC counts p-p)                               */
-  float countsPP = lv / 64.0f;
-  float voltsPP  = countsPP * 5.0f / 1023.0f;     // Vpp in the analogue world
-
-  /* ---- dead-zone & power-law % ---- */
-  float usable = voltsPP - DEADZONE_VPP;          // remove floor
-  if (usable < 0) usable = 0;
-  float linRatio = usable / (FULL_SCALE_VPP - DEADZONE_VPP);  // 0…1
-  if (linRatio > 1.0f) linRatio = 1.0f;
-  float strengthPctF = 100.0f * powf(linRatio, POWER_EXP);    // non-linear
-  uint8_t strength   = (uint8_t)(strengthPctF + 0.5f);        // 0-100 for display
-
-  //Serial debugging
-  if (nowMs - lastStrengthPrintMs >= 200) {
-      lastStrengthPrintMs = nowMs;
-      Serial.print(F("LockIn="));  Serial.print(lv);
-      Serial.print(F("  Vpp="));   Serial.print(voltsPP, 3);
-      Serial.print(F(" V  Strength=")); Serial.print(strengthPctF, 1);
-      Serial.println(F(" % (PL)"));
+  /* ─── Serial debug (2 Hz) ─── */
+  static unsigned long tPrint=0;
+  if (nowMs - tPrint >= 500) {
+    tPrint = nowMs;
+    Serial.print(F("lv="));   Serial.print(lv);
+    Serial.print(F("  Vpp="));Serial.print(voltsPP(lv),3);
+    Serial.print(F(" V  %="));Serial.println(pct);
   }
 
-  /* ---------- ALIGN ---------- */
-  if(mode == ALIGN){
-    DisplayDriver::showStrength(strength);
-    delay(50);
-    if(strength >= STARTUP_THRESHOLD_PERCENT){
-      baselineLockin = lv;
-      breakThresh   = baselineLockin*(1.0-BREAK_DROP_PERCENT/100.0);
-      restoreThresh = baselineLockin*(1.0-RESTORE_DROP_PERCENT/100.0);
-      mode          = READY;                // ← go to READY state
-      readyBlinkMs  = nowMs;
-      readyBlinkState=false;
-      Serial.println(F("Beam OK – READY (waiting for first pass)"));
-    }
-    return;
-  }
-
-  /* ---------- READY (blink  ---  until first true break) ---------- */
-if (mode == READY) {
-
-  /* 1) blink “---” every 500 ms */
-  if (nowMs - readyBlinkMs >= 500) {
-    readyBlinkMs     = nowMs;
-    readyBlinkState  = !readyBlinkState;
-    DisplayDriver::showReady(readyBlinkState);
-  }
-
-  /* 2) Debounced first beam break */
-  if (nowMs - lastTransitionMs >= TRANSITION_DEBOUNCE_MS) {
-
-    /* a) look for drop below breakThresh to count as BROKEN */
-    if (beamPresent && lv < breakThresh) {
-      beamPresent       = false;
-      lastTransitionMs  = nowMs;
-      /* FIRST real crossing → start timer, go to RUNNING */
-      timingStarted     = true;
-      lastCrossMicros   = micros();
-      mode              = RUNNING;
-      DisplayDriver::showCurrentTime(0);   // show 0.0
-      Serial.println(F("► READY → RUNNING (first pass)"));
-    }
-
-    /* b) if you ever dipped, require restore above restoreThresh
-          before another try (typical when driver waves a hand)     */
-    else if (!beamPresent && lv > restoreThresh) {
-      beamPresent       = true;
-      lastTransitionMs  = nowMs;
-      Serial.println(F("(beam restored while READY)"));
-    }
-  }
-
-  return;        // stay inside READY until a real, debounced break
-}
-
-  /* ---------- Debounced beam break ---------- */
-  if (nowMs - lastTransitionMs >= TRANSITION_DEBOUNCE_MS) {
-    if (beamPresent && lv < breakThresh) {
-      beamPresent = false;
-      lastTransitionMs = nowMs;
-      unsigned long nowUs = micros();
-      Serial.println(F("Beam BROKEN"));
-
-      if (!timingStarted) {
-        timingStarted   = true;
-        lastCrossMicros = nowUs;
-        mode            = RUNNING;
-        Serial.println(F("Timer started"));
-      } else if (mode == RUNNING) {
-        unsigned long lapUs = nowUs - lastCrossMicros;
-        lastCrossMicros = nowUs;
-        lastLapUs       = lapUs;
-        unsigned int lapCs = (lapUs + 5000) / 10000;       // centiseconds
-
-        Serial.print(F("Lap ")); Serial.print(lapCs / 100.0, 2); Serial.println(F(" s"));
-
-        if (!bestLapSet || lapCs < bestLapCentis) {
-          bestLapCentis = lapCs;
-          bestLapSet    = true;
-          DisplayDriver::showBestTime(bestLapCentis);
-          Serial.println(F("↳ NEW BEST"));
-        }
-
-        flashStartMs  = nowMs;
-        flashToggleMs = nowMs;
-        mode          = FLASH;
-        DisplayDriver::showCurrentTime(lapUs);
+  /* ─── State machine ─── */
+  switch (state) {
+    /* ---------- ALIGN ---------- */
+    case State::ALIGN:
+      DisplayDriver::showStrength(pct);
+      delay(100);
+      if (pct >= STARTUP_MIN_STRENGTH) {          // strong enough now
+          if (tAlignHoldStart == 0)               // start 10-s timer
+              tAlignHoldStart = nowMs;
+          else if (nowMs - tAlignHoldStart >= ALIGN_HOLD_MS) {
+              /* held ≥10 s → lock thresholds & enter READY */
+              breakThresh   = lv * (1.0 - BREAK_DROP_PERCENT/100.0);
+              restoreThresh = lv * (1.0 - RESTORE_HYST_PERCENT/100.0);
+              state         = State::READY;
+              tReadyBlink   = nowMs;
+              readyOn       = false;
+              Serial.println(F("Beam stable – READY (waiting for first pass)"));
+          }
+      } else {
+          tAlignHoldStart = 0;  // lost strength → restart timer
       }
+      return;
+
+    /* ---------- READY ---------- */
+    case State::READY:
+      if (nowMs - tReadyBlink >= 500) {
+        tReadyBlink = nowMs;
+        readyOn = !readyOn;
+        DisplayDriver::showReady(readyOn);
+      }
+      /* debounce first break */
+      if (nowMs - tLastDebounce >= 50) {
+        if (beamPresent && lv < breakThresh) {
+          beamPresent = false;
+          tLastDebounce = nowMs;
+          timingStarted = true;
+          lastCrossUs   = micros();
+          DisplayDriver::showCurrentTime(0);
+          state = State::RUNNING;
+          Serial.println(F("► Timer START"));
+        }
+      }
+      return;
+
+    /* ---------- RUNNING / FLASH shared break-detect ---------- */
+    default:
+      if (nowMs - tLastDebounce >= 50) {
+        if (beamPresent && lv < breakThresh) {
+          beamPresent     = false;
+          tLastDebounce   = nowMs;
+
+          unsigned long nowUs = micros();
+          unsigned long lapUs = nowUs - lastCrossUs;
+
+          /*  IGNORE if break happens too soon (e.g., rear wheels)  */
+          if (state == State::RUNNING && lapUs < MIN_LAP_US) {
+              Serial.println(F("-- spurious short break ignored --"));
+              /* do NOT update lastCrossUs — wait for real lap */
+          }
+          else {
+              /* accept lap (or first pass from READY) */
+              lastCrossUs = nowUs;
+
+              if (state == State::RUNNING) {                // real new lap
+                  lastLapUs = lapUs;
+                  unsigned int lapCs = (lapUs + 5000) / 10000;
+                  Serial.print(F("Lap ")); Serial.print(lapCs / 100.0, 2);
+                  Serial.println(F(" s"));
+
+                  if (!bestLapSeen || lapCs < bestLapCs) {
+                      bestLapCs   = lapCs;
+                      bestLapSeen = true;
+                      DisplayDriver::showBestTime(bestLapCs);
+                      Serial.println(F("↳ NEW BEST"));
+                  }
+                  tFlashStart  = nowMs;
+                  tFlashToggle = nowMs;
+                  state        = State::FLASH;
+                  DisplayDriver::showCurrentTime(lapUs);
+              }
+              else if (state == State::READY) {             // first pass
+                  timingStarted = true;
+                  DisplayDriver::showCurrentTime(0);
+                  state = State::RUNNING;
+                  Serial.println(F("► Timer START"));
+              }
+          }
+      }
+        else if (!beamPresent && lv > restoreThresh) {
+          beamPresent = true;
+          tLastDebounce = nowMs;
+        }
+      }
+      break;
+  }
+
+  /* ---------- RUNNING display ---------- */
+  if (state == State::RUNNING) {
+    /* lap timeout: no break for 100 s */
+    if (micros() - lastCrossUs >= MAX_LAP_US) {
+        Serial.println(F("‼ 100-s timeout – returning to ALIGN"));
+        state = State::ALIGN;
+        DisplayDriver::blankAll(); 
+        bestLapCs = 0; 
+        bestLapSeen = false;                    // keep best, but require new lap
+        timingStarted = false;
+        tAlignHoldStart = 0;                    // restart stability timer
+        delay(2500);
+        return;
     }
-    else if (!beamPresent && lv > restoreThresh) {
-      beamPresent = true;
-      lastTransitionMs = nowMs;
-      Serial.println(F("Beam RESTORED"));
+
+    /* normal 0.1-s display refresh */
+    if (nowMs - tLastDisp >= DISP_REFRESH_MS) {
+        tLastDisp = nowMs;
+        DisplayDriver::showCurrentTime(micros() - lastCrossUs);
     }
   }
 
-  /* -------------------- WAIT / RUNNING / FLASH -------------------- */
-  if (mode == RUNNING) {
-    if (nowMs - lastDisplayMs >= DISPLAY_REFRESH_MS) {
-      lastDisplayMs = nowMs;
-      DisplayDriver::showCurrentTime(micros() - lastCrossMicros);
-    }
-  }
-  else if (mode == FLASH) {
-    if (nowMs - flashStartMs >= LAP_DISPLAY_FLASH_MS) {
-      mode = RUNNING;
-      lastDisplayMs = nowMs;
-    } else if (nowMs - flashToggleMs >= 500) {
-      flashToggleMs = nowMs;
-      static bool on = false;
+  /* ---------- FLASH state ---------- */
+  if (state == State::FLASH) {
+    if (nowMs - tFlashStart >= FLASH_DURATION_MS) {
+      state = State::RUNNING;
+      tLastDisp = nowMs;
+    } else if (nowMs - tFlashToggle >= 500) {
+      tFlashToggle = nowMs;
+      static bool on=false;
       on = !on;
-      if (on) DisplayDriver::showCurrentTime(lastLapUs);
-      else    DisplayDriver::blankRedDigits();
+      on ? DisplayDriver::showCurrentTime(lastLapUs)
+         : DisplayDriver::blankRedDigits();
     }
   }
 }
