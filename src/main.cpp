@@ -10,13 +10,17 @@ const unsigned long DISPLAY_REFRESH_MS   = 100;    // 10 Hz
 const unsigned long LAP_DISPLAY_FLASH_MS = 5000;   // 5 s flash
 
 /* ------------- Thresholds ------------- */
-const uint8_t STARTUP_THRESHOLD_PERCENT = 105;
-const float   BREAK_DROP_PERCENT        = 30.0;
+const uint8_t STARTUP_THRESHOLD_PERCENT = 50;
+const float   BREAK_DROP_PERCENT        = 10.0;
 const float   RESTORE_DROP_PERCENT      = 15.0;
+
+/* ---------- signal → percent parameters ---------- */
+const float DEADZONE_VPP   = 0.005f;   // anything below this = 0 %
+const float FULL_SCALE_VPP = 0.2f;     // 100 % when rails clip
+float       POWER_EXP      = 0.25f;    // 0.50 = sqrt, 0.33 = cube-root, etc.
 
 /* ---------- signal-print helpers ---------- */
 unsigned long lastStrengthPrintMs = 0;
-const float    POWER_EXP          = 0.50f;   // √(linear %)  -> perceptual curve
 
 /* ------------- Globals ------------- */
 volatile long lockinValue = 0;
@@ -84,26 +88,27 @@ void loop()
   noInterrupts();
   long lv = lockinValue;
   interrupts();
-  if (lv < 0) lv = -lv;
-  if (lv > (long)lockinPeak) lockinPeak = lv;           // cast to silence warning
-  uint8_t strength = lockinPeak ? (lv * 100UL) / lockinPeak : 0;
+  /* ---- convert lock-in sum → absolute Vpp ----
+   lv ≈ 64 × (VINon − VINoff)
+   countsPP = lv / 64  (ADC counts p-p)                               */
+  float countsPP = lv / 64.0f;
+  float voltsPP  = countsPP * 5.0f / 1023.0f;     // Vpp in the analogue world
 
-  /* --- Serial debug every 200 ms --------------------------------- */
+  /* ---- dead-zone & power-law % ---- */
+  float usable = voltsPP - DEADZONE_VPP;          // remove floor
+  if (usable < 0) usable = 0;
+  float linRatio = usable / (FULL_SCALE_VPP - DEADZONE_VPP);  // 0…1
+  if (linRatio > 1.0f) linRatio = 1.0f;
+  float strengthPctF = 100.0f * powf(linRatio, POWER_EXP);    // non-linear
+  uint8_t strength   = (uint8_t)(strengthPctF + 0.5f);        // 0-100 for display
+
+  //Serial debugging
   if (nowMs - lastStrengthPrintMs >= 200) {
       lastStrengthPrintMs = nowMs;
-
-      /* convert lock-in → peak-to-peak ADC counts → volts             */
-      float countsPP = lv / 64.0f;                      // see text
-      float voltsPP  = countsPP * 5.0f / 1023.0f;       // Vpp
-
-      /* perceptual power-law (sqrt) percentage                       */
-      float ratio    = lockinPeak ? (float)lv / (float)lockinPeak : 0.0f;
-      float percent  = 100.0f * sqrtf(ratio);           // x^0.5
-
       Serial.print(F("LockIn="));  Serial.print(lv);
       Serial.print(F("  Vpp="));   Serial.print(voltsPP, 3);
-      Serial.print(F(" V  Strength=")); Serial.print(percent, 1);
-      Serial.println(F(" % (sqrt)"));
+      Serial.print(F(" V  Strength=")); Serial.print(strengthPctF, 1);
+      Serial.println(F(" % (PL)"));
   }
 
   /* ---------- ALIGN ---------- */
