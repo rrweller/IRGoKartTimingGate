@@ -26,8 +26,6 @@ constexpr float POWER_EXP      = 0.20f;    // ¼-power curve emphasises low end
 /* ────────── Globals ────────── */
 volatile long lockIn = 0;          // running correlation accumulator
 volatile bool phase  = 0;          // toggles each PWM half-cycle
-#define LOCKIN_DECAY      7        // 1/128 leak
-#define SAMPLE_PER_PERIOD 2        // quadrature
 
 long   breakThresh  = 0;           // lv below ⇒ beam broken
 long   restoreThresh= 0;           // lv above ⇒ beam restored
@@ -59,15 +57,12 @@ unsigned long tLastDebounce=0;
 unsigned long tBrokenStart = 0;
 
 /* ────────── ISR: quadrature lock-in ────────── */
-ISR(TIMER2_COMPA_vect) {          // add phase
-    int v = analogRead(IR_SENSOR_PIN) - 512;
-    lockIn += v;
-}
-
-ISR(TIMER2_COMPB_vect) {          // subtract phase + leak
-    int v = analogRead(IR_SENSOR_PIN) - 512;
-    lockIn -= v;
-    lockIn -= lockIn >> LOCKIN_DECAY;
+ISR(TIMER2_COMPB_vect)
+{
+  int sample = analogRead(IR_SENSOR_PIN) - 512;     // centre at 0
+  lockIn += phase ? -sample : sample;               // + / – correlate
+  lockIn -= lockIn >> 6;                            // 1/64 leakage
+  phase = !phase;
 }
 
 /* ────────── Helpers ────────── */
@@ -88,8 +83,6 @@ void setup()
 {
   Serial.begin(9600);
   DisplayDriver::begin();
-  OCR2A = 0;                        // COMPA at TOP (0°)
-  TIMSK2 |= (1<<OCIE2A);            // enable ISR A
 
   /* quick power-on demo */
   DisplayDriver::showCurrentTime(888888888UL);
