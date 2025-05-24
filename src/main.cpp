@@ -24,7 +24,7 @@ constexpr float POWER_EXP      = 0.20f;    // ¼-power curve emphasises low end
 
 /* ────────── Sample-count configuration ────────── */
 // Total reads per full PWM cycle. Must be even.
-constexpr uint8_t SAMPLES_PER_PERIOD = 4;
+constexpr uint8_t SAMPLES_PER_PERIOD = 32;
 constexpr uint8_t SAMPLES_PER_PHASE = SAMPLES_PER_PERIOD / 2;
 
 /* ────────── Globals ────────── */
@@ -97,7 +97,7 @@ ISR(TIMER2_COMPB_vect)
   uint16_t raw;
   for (uint8_t i = 0; i < SAMPLES_PER_PHASE; ++i) {
     raw = readADC10();
-    corr += ((int)raw - 512);  // center around midpoint (512 ≈ 2.5 V midpoint)
+    corr += ((int)raw - 512);
 
     if (PIND & LASER_BIT) {
       onSum += raw;
@@ -107,9 +107,11 @@ ISR(TIMER2_COMPB_vect)
       offCount++;
     }
   }
+// Normalize by sample count to get average
+corr /= SAMPLES_PER_PHASE;
 
   lockIn += phase ? -corr : corr;
-  lockIn -= lockIn >> 6;
+  lockIn -= lockIn >> 7;
   phase = !phase;
 
   if (!phase) cycleReady = true;
