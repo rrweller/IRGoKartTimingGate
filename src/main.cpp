@@ -4,6 +4,7 @@
 /* ────────── Hardware ────────── */
 constexpr uint8_t LASER_PWM_PIN = 3;     // drives IR laser (Timer-2 PWM)
 constexpr uint8_t IR_SENSOR_PIN = A0;    // TIA output into ADC
+#define LASER_BIT _BV(PD3)
 
 /* ────────── UI timing ────────── */
 constexpr unsigned long DISP_REFRESH_MS   = 100;   // update red every 0.1 s
@@ -16,16 +17,26 @@ constexpr float   RESTORE_HYST_PERCENT = 15.0; // % gap to declare restored
 unsigned long tAlignHoldStart = 0;
 constexpr unsigned long ALIGN_HOLD_MS = 10000;   // 10-s stable window
 
-/* ────────── Signal-to-percent mapping ──────────
-   lv → Vpp = (lv / 64) * 5/1023  (see ISR note)
-   then map [DEADZONE_VPP .. FULL_SCALE_VPP] → [0..100] with power law  */
-constexpr float DEADZONE_VPP   = 0.0055f;   // 5 mV ≈ no light
+/* ────────── Signal-to-percent mapping ────────── */
+constexpr float DEADZONE_VPP   = 0.03f;   // 5 mV ≈ no light
 constexpr float FULL_SCALE_VPP = 0.20f;    // 0.20 Vpp ≈ strong return
 constexpr float POWER_EXP      = 0.20f;    // ¼-power curve emphasises low end
+
+/* ────────── Sample-count configuration ────────── */
+// Total reads per full PWM cycle. Must be even.
+constexpr uint8_t SAMPLES_PER_PERIOD = 4;
+constexpr uint8_t SAMPLES_PER_PHASE = SAMPLES_PER_PERIOD / 2;
 
 /* ────────── Globals ────────── */
 volatile long lockIn = 0;          // running correlation accumulator
 volatile bool phase  = 0;          // toggles each PWM half-cycle
+
+// raw-ADC accumulators for ON vs OFF
+volatile uint32_t onSum      = 0;
+volatile uint32_t offSum     = 0;
+volatile uint16_t onCount    = 0;
+volatile uint16_t offCount   = 0;
+volatile bool     cycleReady = false; // set when a full PWM cycle completes
 
 long   breakThresh  = 0;           // lv below ⇒ beam broken
 long   restoreThresh= 0;           // lv above ⇒ beam restored
@@ -37,22 +48,6 @@ unsigned long lastLapUs   = 0;     // for flashing
 
 unsigned int bestLapCs   = 0;      // best lap in centiseconds
 bool         bestLapSeen = false;
-
-/* ---------- ADC lock-in globals ---------- */
-constexpr uint16_t ADC_RATE_HZ      = 5000;   // 5 kHz free-run
-constexpr uint8_t  INTEGRATE_CYCLES = 10;     // = 10 full PWM cycles (~20 ms)
-
-volatile long    sumOn   = 0;   // accumulate ON-phase ADC counts
-volatile long    sumOff  = 0;   // accumulate OFF-phase ADC counts
-volatile uint16_t nOn    = 0;   // how many samples in this half of cycle
-volatile uint16_t nOff   = 0;
-
-long   cycleRing[INTEGRATE_CYCLES] = {0};  // fixed-length FIR
-uint8_t ringHead = 0;
-long   integrateSum = 0;                   // sum of ring → detector output
-
-float  noiseFloor = 0;                     // dynamic OFF average
-constexpr float NOISE_ALPHA = 0.999f;      // time constant ≈ 1 s
 
 /* ───────── Lap timeout ───────── */
 constexpr unsigned long MAX_LAP_US = 100000000UL; // 100 s → reset
@@ -72,52 +67,59 @@ unsigned long tFlashToggle= 0;
 unsigned long tLastDebounce=0;
 unsigned long tBrokenStart = 0;
 
-/* ────────── ISR: quadrature lock-in ────────── */
-/* 1)  ADC interrupt fires every 200 µs (~5 kHz) */
-ISR(ADC_vect)
-{
-  int16_t v = ADC - 512;                       // centre 0
-  if (digitalRead(LASER_PWM_PIN)) {            // laser ON?
-      sumOn += v;
-      ++nOn;
-  } else {
-      sumOff += v;
-      ++nOff;
-  }
+/* ────────── ADC acceleration & helpers ────────── */
+void configureADC() {
+  ADMUX  = (1<<REFS0) | (0 & 0x07); // AVcc, channel A0, right-adjusted
+  ADCSRA = (1<<ADEN) | (1<<ADPS2) | (1<<ADPS0); // prescaler=32
 }
 
-/* 2)  Timer-2 COMPA fires once **per full PWM cycle**
-       (we leave OCR2A at its default TOP so frequency = 490 Hz)      */
-ISR(TIMER2_COMPA_vect)
+uint16_t readADC10() {
+  ADCSRA |= (1<<ADSC);
+  while (ADCSRA & (1<<ADSC));
+  return ADC;  // full 10-bit result (0–1023)
+}
+
+static inline int8_t readSensor() {
+  return (int8_t)readADC10() - 512;
+}
+
+constexpr uint8_t SUM_SHIFT =
+  (SAMPLES_PER_PHASE == 1)  ? 0 :
+  (SAMPLES_PER_PHASE == 2)  ? 1 :
+  (SAMPLES_PER_PHASE == 4)  ? 2 :
+  (SAMPLES_PER_PHASE == 8)  ? 3 :
+  (SAMPLES_PER_PHASE == 16) ? 4 : 5;
+
+/* ────────── Fast quadrature lock-in ISR ────────── */
+ISR(TIMER2_COMPB_vect)
 {
-  /* Guard against divide-by-zero */
-  if (nOn == 0 || nOff == 0) {
-    // avoid divide-by-zero, but still reset for next cycle
-    sumOn = sumOff = 0;
-    nOn   = nOff   = 0;
-    return;
+  long corr = 0;
+  uint16_t raw;
+  for (uint8_t i = 0; i < SAMPLES_PER_PHASE; ++i) {
+    raw = readADC10();
+    corr += ((int)raw - 512);  // center around midpoint (512 ≈ 2.5 V midpoint)
+
+    if (PIND & LASER_BIT) {
+      onSum += raw;
+      onCount++;
+    } else {
+      offSum += raw;
+      offCount++;
+    }
   }
 
-  /* Per-cycle lock-in value */
-  long cycleVal = (sumOn / nOn) - (sumOff / nOff);
+  lockIn += phase ? -corr : corr;
+  lockIn -= lockIn >> 6;
+  phase = !phase;
 
-  /* ---------- ring-buffer FIR integration ---------- */
-  integrateSum -= cycleRing[ringHead];   // remove oldest
-  integrateSum += cycleVal;              // add newest
-  cycleRing[ringHead] = cycleVal;
-  ringHead = (ringHead + 1) % INTEGRATE_CYCLES;
-
-  /* ---------- dynamic noise floor from OFF average ---------- */
-  float offAvg = (float)sumOff / nOff;        // signed counts
-  noiseFloor = NOISE_ALPHA * noiseFloor + (1-NOISE_ALPHA) * offAvg;
-
-  /* Reset accumulators for next cycle */
-  sumOn = sumOff = 0;
-  nOn   = nOff   = 0;
+  if (!phase) cycleReady = true;
 }
 
 /* ────────── Helpers ────────── */
-inline float voltsPP(long lv)  { return (lv/64.0f) * 5.0f / 1023.0f; }
+inline float voltsPP(long lv)
+{
+  return (lv/64.0f)*5.0f/1023.0f;
+}
 
 uint8_t signalPercent(long lv)
 {
@@ -140,32 +142,44 @@ void setup()
   delay(1500);
   DisplayDriver::showStrength(0);
 
-  /* laser PWM: Timer-2, D3, 490 Hz @ 50 % */
+  /* fast ADC for IR_SENSOR_PIN */
+  configureADC();
+
+  /* laser PWM: Timer-2, D3, 490 Hz @ 50% */
   pinMode(LASER_PWM_PIN, OUTPUT);
   analogWrite(LASER_PWM_PIN, 128);
-  bitSet(TIMSK2, OCIE2A);
-
-    /* ── ADC free-running @ ~5 kHz (prescaler 32) ── */
-  ADMUX  = (1<<REFS0) | 0; 
-  ADCSRA = (1<<ADEN)
-       | (1<<ADATE)
-       | (1<<ADIE)
-       | (1<<ADPS2)
-       | (1<<ADPS0); // PS=32
-  ADCSRB = 0;            // free-run
-  ADCSRA |= (1<<ADSC);   // start conversions
+  bitSet(TIMSK2, OCIE2B);          // enable ISR
 
   Serial.println(F("ALIGN mode – aim for ≥50 %"));
-  tStateEntry = millis();
 }
+
 
 /* ────────── Main loop ────────── */
 void loop()
 {
-  /* snapshot & convert signal */
+  // 1) Grab fresh lock-in level
   noInterrupts();
-    long lv = labs(integrateSum);
+    long lv = (lockIn < 0) ? -lockIn : lockIn;
   interrupts();
+
+  // 2) If a full cycle completed, compute true Vpp
+  static float realVpp = 0;
+  if (cycleReady) {
+    noInterrupts();
+      uint32_t os = onSum, ofs = offSum;
+      uint16_t oc = onCount, ofc = offCount;
+      onSum = offSum = onCount = offCount = 0;
+      cycleReady = false;
+    interrupts();
+
+    if (oc && ofc) {
+      float avgOn  = float(os)/oc;
+      float avgOff = float(ofs)/ofc;
+      realVpp = fabs(avgOn - avgOff)*(5.0f/1023.0f); // accurate to ADC 10-bit
+    } else {
+      realVpp = 0;
+    }
+  }
   uint8_t pct = signalPercent(lv);
   unsigned long nowMs = millis();
 
@@ -173,9 +187,10 @@ void loop()
   static unsigned long tPrint=0;
   if (nowMs - tPrint >= 500) {
     tPrint = nowMs;
-    Serial.print(F("lv="));   Serial.print(lv);
-    Serial.print(F("  Vpp="));Serial.print(voltsPP(lv),3);
-    Serial.print(F(" V  %="));Serial.println(pct);
+    Serial.print(F("rate=")); Serial.print(SAMPLES_PER_PERIOD);
+    Serial.print(F("  lv=")); Serial.print(lv);
+    Serial.print(F("  Vpp(raw)=")); Serial.print(realVpp, 3);
+    Serial.print(F("  %=")); Serial.println(pct);
   }
 
   /* ─── State machine ─── */
@@ -191,17 +206,13 @@ void loop()
           if (tAlignHoldStart == 0)          // start 10-s timer
               tAlignHoldStart = nowMs;
           else if (nowMs - tAlignHoldStart >= ALIGN_HOLD_MS) {
-              breakThresh   = (long)noiseFloor
-                + (long)((FULL_SCALE_VPP * 1023.0f/5.0f)
-                         * (BREAK_DROP_PERCENT/100.0f));
-              restoreThresh = (long)noiseFloor
-                              + (long)((FULL_SCALE_VPP * 1023.0f/5.0f)
-                                      * (RESTORE_HYST_PERCENT/100.0f));
-              state = State::READY;
+              breakThresh   = lv * (1.0 - BREAK_DROP_PERCENT/100.0);
+              restoreThresh = lv * (1.0 - RESTORE_HYST_PERCENT/100.0);
+              state         = State::READY;
               tStateEntry = nowMs;
-              tReadyBlink = nowMs;
-              readyOn = false;
-              beamPresent = true;
+              tReadyBlink   = nowMs;
+              readyOn       = false;
+              beamPresent   = true;
               tBrokenStart = 0;
               Serial.println(F("Beam stable – READY (waiting for first pass)"));
           }
