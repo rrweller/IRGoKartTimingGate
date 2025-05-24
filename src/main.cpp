@@ -23,89 +23,133 @@ constexpr float DEADZONE_VPP   = 0.0055f;   // 5 mV ≈ no light
 constexpr float FULL_SCALE_VPP = 0.20f;    // 0.20 Vpp ≈ strong return
 constexpr float POWER_EXP      = 0.20f;    // ¼-power curve emphasises low end
 
+
+// How many full PWM (490 Hz) cycles to accumulate before a "lock" sample:
+constexpr uint8_t INTEGRATION_CYCLES = 5;  // ≃10 ms window (5×2 ms)
+
 /* ────────── Globals ────────── */
-volatile long lockIn = 0;          // running correlation accumulator
-volatile bool phase  = 0;          // toggles each PWM half-cycle
+volatile long  _lockAcc       = 0;  // accumulating correlator
+volatile bool  _phase         = false;  // toggles each half cycle
 
-long   breakThresh  = 0;           // lv below ⇒ beam broken
-long   restoreThresh= 0;           // lv above ⇒ beam restored
-bool   beamPresent  = true;
+// Cycle‐counting & sampled lock value
+volatile uint8_t  _halfCycleCount = 0;
+volatile uint8_t  _cycleCount     = 0;
+volatile long     lockSample      = 0;  // snapshot after INTEGRATION_CYCLES
 
+// Dynamic noise floor (OFF‐phase only)
+float noiseFloor = 0.002f;
+
+/* Thresholds computed after ALIGN */
+long breakThresh = 0, restoreThresh = 0;
+bool beamPresent = true;
+
+/* Lap‐timing state */
 bool   timingStarted = false;
-unsigned long lastCrossUs = 0;     // micros at previous beam break
-unsigned long lastLapUs   = 0;     // for flashing
+unsigned long lastCrossUs = 0, lastLapUs = 0;
+unsigned int  bestLapCs  = 0; bool bestLapSeen = false;
 
-unsigned int bestLapCs   = 0;      // best lap in centiseconds
-bool         bestLapSeen = false;
-
-/* ───────── Lap timeout ───────── */
-constexpr unsigned long MAX_LAP_US = 100000000UL; // 100 s → reset
-constexpr unsigned long MIN_LAP_US = 5000000UL;
+/* Lap timeout / min‐lap */
+constexpr unsigned long MAX_LAP_US     = 100000000UL;
+constexpr unsigned long MIN_LAP_US     = 5000000UL;
 constexpr unsigned long BROKEN_TIMEOUT_MS = 5000;
 
-/* UI state */
+/* ────────── State machine ────────── */
 enum class State { ALIGN, READY, RUNNING, FLASH, ERROR };
 State state = State::ALIGN;
 
-unsigned long tReadyBlink = 0;
-bool          readyOn     = false;
-unsigned long tStateEntry = 0;
-unsigned long tLastDisp   = 0;
-unsigned long tFlashStart = 0;
-unsigned long tFlashToggle= 0;
-unsigned long tLastDebounce=0;
-unsigned long tBrokenStart = 0;
+unsigned long tStateEntry   = 0;
+unsigned long tLastDebounce = 0;
+unsigned long tBrokenStart  = 0;
+unsigned long tLastDisp     = 0;
+unsigned long tFlashStart   = 0;
+unsigned long tFlashToggle  = 0;
+unsigned long tReadyBlink   = 0;
+bool          readyOn       = false;
 
-/* ────────── ISR: quadrature lock-in ────────── */
-ISR(TIMER2_COMPB_vect)
-{
-  int sample = analogRead(IR_SENSOR_PIN) - 512;     // centre at 0
-  lockIn += phase ? -sample : sample;               // + / – correlate
-  lockIn -= lockIn >> 6;                            // 1/64 leakage
-  phase = !phase;
+/* ────────── ISR: PWM half‐cycle toggler & leak τ≈130 ms ────────── */
+ISR(TIMER2_COMPB_vect) {
+  // just flip phase every half cycle of 490 Hz → 980 Hz toggles
+  _phase = !_phase;
+
+  // apply the 1/128 leak
+  _lockAcc -= _lockAcc >> 7;
+
+  // count half cycles → full cycles
+  if (++_halfCycleCount >= 2) {
+    _halfCycleCount = 0;
+    // measure one full cycle
+    if (++_cycleCount >= INTEGRATION_CYCLES) {
+      lockSample    = _lockAcc;
+      _cycleCount   = 0;
+      //_lockAcc    = 0; 
+    }
+  }
+}
+
+/* ── ISR: free-running ADC @ ≈9.6 kHz, update lock/ noiseFloor ── */
+ISR(ADC_vect) {
+  int samp = ADC - 512;             // raw signed sample
+
+  // correlate into lock
+  _lockAcc += (_phase ? -samp : samp);
+
+  // dynamic noise floor tracks OFF‐phase only:
+  if (!_phase) {
+    // simple IIR: noiseFloor ← α·noiseFloor + (1–α)·|samp|
+    constexpr float a = 0.995f;
+    noiseFloor = a*noiseFloor + (1.0f-a)*(abs(samp)*5.0f/1023.0f);
+  }
 }
 
 /* ────────── Helpers ────────── */
-inline float voltsPP(long lv)  { return (lv/64.0f) * 5.0f / 1023.0f; }
-
-uint8_t signalPercent(long lv)
-{
+inline float voltsPP(long lv) {
+  return (lv/64.0f)*(5.0f/1023.0f);
+}
+uint8_t signalPercent(long lv) {
+  // map [noiseFloor..FULL_SCALE_VPP] → [0..100] with power law
   float vpp = voltsPP(lv);
-  float u   = vpp - DEADZONE_VPP;
+  float u   = vpp - noiseFloor - DEADZONE_VPP;
   if (u < 0) u = 0;
   float lin = u / (FULL_SCALE_VPP - DEADZONE_VPP);
   if (lin > 1) lin = 1;
-  return (uint8_t)(100.0f * powf(lin, POWER_EXP) + 0.5f);
+  return uint8_t(100*powf(lin, POWER_EXP) + 0.5f);
 }
 
 /* ────────── Setup ────────── */
-void setup()
-{
+void setup(){
   Serial.begin(9600);
   DisplayDriver::begin();
 
-  /* quick power-on demo */
-  DisplayDriver::showCurrentTime(888888888UL);
-  delay(1500);
+  // Demo
+  DisplayDriver::showCurrentTime(1200000UL);
+  delay(2000);
   DisplayDriver::showStrength(0);
 
-  /* laser PWM: Timer-2, D3, 490 Hz @ 50 % */
+  // Timer2: 490 Hz PWM on D3 & COMPB interrupt
   pinMode(LASER_PWM_PIN, OUTPUT);
   analogWrite(LASER_PWM_PIN, 128);
-  bitSet(TIMSK2, OCIE2B);          // enable ISR
+  TIMSK2 |= _BV(OCIE2B);
 
+  // ADC free‐run @ prescaler 128 → ≈9.6 kHz conversions
+  ADMUX  = _BV(REFS0) | (IR_SENSOR_PIN & 0x07);
+  ADCSRA = _BV(ADEN) | _BV(ADATE) | _BV(ADIE)
+         | _BV(ADPS2)|_BV(ADPS1)|_BV(ADPS0);
+  ADCSRB = 0;        // free‐running
+  ADCSRA |= _BV(ADSC);  // start
+
+  tStateEntry = millis();
   Serial.println(F("ALIGN mode – aim for ≥50 %"));
 }
 
 /* ────────── Main loop ────────── */
-void loop()
-{
-  /* snapshot & convert signal */
-  noInterrupts();
-    long lv = (lockIn < 0) ? -lockIn : lockIn;
-  interrupts();
-  uint8_t pct = signalPercent(lv);
+void loop(){
   unsigned long nowMs = millis();
+
+  // take snapshot of the most recent integrated lockSample:
+  long lv = (lockSample<0 ? -lockSample : lockSample);
+
+  // compute strength
+  uint8_t pct = signalPercent(lv);
 
   /* ─── Serial debug (2 Hz) ─── */
   static unsigned long tPrint=0;
