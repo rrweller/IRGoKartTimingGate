@@ -56,6 +56,12 @@ unsigned long tFlashToggle= 0;
 unsigned long tLastDebounce=0;
 unsigned long tBrokenStart = 0;
 
+/* ───────── Raw-ADC tracking for debug ───────── */
+static int  rawMin = 1023, rawMax = 0;
+static unsigned long tRawWindow = 0;              // window reset timer
+constexpr unsigned long RAW_WINDOW_MS = 200;      // update every 200 ms
+inline float countsToVolts(int c) { return c * 5.0f / 1023.0f; }
+
 /* ────────── ISR: quadrature lock-in ────────── */
 ISR(TIMER2_COMPB_vect)
 {
@@ -107,13 +113,32 @@ void loop()
   uint8_t pct = signalPercent(lv);
   unsigned long nowMs = millis();
 
+  /* Raw ADC tracking */
+  int rawNow = analogRead(IR_SENSOR_PIN);           // instantaneous sample
+  if (rawNow < rawMin) rawMin = rawNow;
+  if (rawNow > rawMax) rawMax = rawNow;
+
+  /* roll the window every RAW_WINDOW_MS so values stay responsive */
+  if (millis() - tRawWindow >= RAW_WINDOW_MS) {
+      rawMin = rawMax = rawNow;
+      tRawWindow = millis();
+  }
+  /* lock-in derived Vpp and % */
+  float vppLockIn = voltsPP(lv);
+  float pctLockIn = pct;
+
+  /* raw ADC peak-to-peak over last window */
+  int   countsPP  = rawMax - rawMin;
+  float vppRaw    = countsToVolts(countsPP);
   /* ─── Serial debug (2 Hz) ─── */
   static unsigned long tPrint=0;
   if (nowMs - tPrint >= 500) {
     tPrint = nowMs;
-    Serial.print(F("lv="));   Serial.print(lv);
-    Serial.print(F("  Vpp="));Serial.print(voltsPP(lv),3);
-    Serial.print(F(" V  %="));Serial.println(pct);
+    Serial.print(F("lv="));     Serial.print(lv);
+    Serial.print(F("  VppLock="));  Serial.print(vppLockIn, 3);
+    Serial.print(F(" V  Str="));    Serial.print(pctLockIn);
+    Serial.print(F("%  |  RawVpp=")); Serial.print(vppRaw, 3);
+    Serial.println(F(" V"));
   }
 
   /* ─── State machine ─── */
