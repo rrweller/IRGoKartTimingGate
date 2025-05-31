@@ -12,15 +12,18 @@ constexpr unsigned long FLASH_DURATION_MS = 5000;  // freeze last-lap for 5 s
 
 /* ────────── Alignment thresholds ────────── */
 constexpr uint8_t STARTUP_MIN_STRENGTH = 50;   // % needed to leave ALIGN
-constexpr float   BREAK_DROP_PERCENT   = 10.0; // % drop ⇒ beam broken
-constexpr float   RESTORE_HYST_PERCENT = 15.0; // % gap to declare restored
+constexpr float   BREAK_DROP_PERCENT   = 5.0; // % drop ⇒ beam broken
+constexpr float   RESTORE_HYST_PERCENT = 10.0; // % gap to declare restored
 unsigned long tAlignHoldStart = 0;
 constexpr unsigned long ALIGN_HOLD_MS = 10000;   // 10-s stable window
 
+
 /* ────────── Signal-to-percent mapping ────────── */
-constexpr float DEADZONE_VPP   = 0.03f;   // 5 mV ≈ no light
-constexpr float FULL_SCALE_VPP = 0.20f;    // 0.20 Vpp ≈ strong return
-constexpr float POWER_EXP      = 0.20f;    // ¼-power curve emphasises low end
+constexpr float DEADZONE_VPP   = 0.025f;
+constexpr float FULL_SCALE_VPP = 0.10f;    // 0.10 Vpp ≈ strong return
+constexpr float POWER_EXP      = 0.3f;    // ¼-power curve emphasises low end
+volatile float vppFilt = 0.0f;             // running estimate (no ISR writes)
+constexpr float VPP_ALPHA = 0.92f;         // 0.97 → τ ≈ 68 ms
 
 /* ────────── Sample-count configuration ────────── */
 // Total reads per full PWM cycle. Must be even.
@@ -66,6 +69,7 @@ unsigned long tFlashStart = 0;
 unsigned long tFlashToggle= 0;
 unsigned long tLastDebounce=0;
 unsigned long tBrokenStart = 0;
+static unsigned long tPrint=0;
 
 /* ────────── ADC acceleration & helpers ────────── */
 void configureADC() {
@@ -77,10 +81,6 @@ uint16_t readADC10() {
   ADCSRA |= (1<<ADSC);
   while (ADCSRA & (1<<ADSC));
   return ADC;  // full 10-bit result (0–1023)
-}
-
-static inline int8_t readSensor() {
-  return (int8_t)readADC10() - 512;
 }
 
 constexpr uint8_t SUM_SHIFT =
@@ -107,8 +107,8 @@ ISR(TIMER2_COMPB_vect)
       offCount++;
     }
   }
-// Normalize by sample count to get average
-corr /= SAMPLES_PER_PHASE;
+  // Normalize by sample count to get average
+  corr /= SAMPLES_PER_PHASE;
 
   lockIn += phase ? -corr : corr;
   lockIn -= lockIn >> 7;
@@ -120,17 +120,16 @@ corr /= SAMPLES_PER_PHASE;
 /* ────────── Helpers ────────── */
 inline float voltsPP(long lv)
 {
-  return (lv/64.0f)*5.0f/1023.0f;
+  return (lv/128.0f)*5.0f/1023.0f;
 }
 
-uint8_t signalPercent(long lv)
+uint8_t percentFromVpp(float vpp)
 {
-  float vpp = voltsPP(lv);
-  float u   = vpp - DEADZONE_VPP;
-  if (u < 0) u = 0;
+  float u = vpp - DEADZONE_VPP;            // clip the dead-zone
+  if (u <= 0)      return 0;
   float lin = u / (FULL_SCALE_VPP - DEADZONE_VPP);
-  if (lin > 1) lin = 1;
-  return (uint8_t)(100.0f * powf(lin, POWER_EXP) + 0.5f);
+  if (lin > 1.0f)  lin = 1.0f;
+  return static_cast<uint8_t>(100.0f * powf(lin, POWER_EXP) + 0.5f);
 }
 
 /* ────────── Setup ────────── */
@@ -159,13 +158,13 @@ void setup()
 /* ────────── Main loop ────────── */
 void loop()
 {
-  // 1) Grab fresh lock-in level
+  /* 1) grab current lock-in level for break detection */
   noInterrupts();
     long lv = (lockIn < 0) ? -lockIn : lockIn;
   interrupts();
 
-  // 2) If a full cycle completed, compute true Vpp
-  static float realVpp = 0;
+  /* 2) once per PWM period get the true Vpp and feed the IIR */
+  static float realVpp = 0.0f;
   if (cycleReady) {
     noInterrupts();
       uint32_t os = onSum, ofs = offSum;
@@ -177,16 +176,21 @@ void loop()
     if (oc && ofc) {
       float avgOn  = float(os)/oc;
       float avgOff = float(ofs)/ofc;
-      realVpp = fabs(avgOn - avgOff)*(5.0f/1023.0f); // accurate to ADC 10-bit
+      realVpp = fabsf(avgOn - avgOff) * (5.0f/1023.0f);
     } else {
-      realVpp = 0;
+      realVpp = 0.0f;
     }
+
+    /* --- 1-pole IIR --- */
+    vppFilt = VPP_ALPHA * vppFilt + (1.0f - VPP_ALPHA) * realVpp;
   }
-  uint8_t pct = signalPercent(lv);
+
+  /* 3) percentage for display & serial */
+  uint8_t pct = percentFromVpp(vppFilt);
   unsigned long nowMs = millis();
 
   /* ─── Serial debug (2 Hz) ─── */
-  static unsigned long tPrint=0;
+  
   if (nowMs - tPrint >= 500) {
     tPrint = nowMs;
     Serial.print(F("rate=")); Serial.print(SAMPLES_PER_PERIOD);
@@ -199,11 +203,14 @@ void loop()
   switch (state) {
     /* ---------- ALIGN ---------- */
     case State::ALIGN:
-      if (nowMs - tStateEntry < 2000) {
+      if (nowMs - tStateEntry < 5000) {
           DisplayDriver::showBanner("ALN");
           return;
       }
-      DisplayDriver::showStrength(pct);
+      if (nowMs - tLastDisp >= 100) {   // DISP_REFRESH_MS = 100
+          tLastDisp = nowMs;
+          DisplayDriver::showStrength(pct);         // smooth % bar
+      }
       if (pct >= STARTUP_MIN_STRENGTH) {
           if (tAlignHoldStart == 0)          // start 10-s timer
               tAlignHoldStart = nowMs;
@@ -225,7 +232,7 @@ void loop()
 
     /* ---------- READY ---------- */
     case State::READY:
-      if (nowMs - tStateEntry < 2000) {      // one-second “RDY”
+      if (nowMs - tStateEntry < 4000) {      // one-second “RDY”
           DisplayDriver::showBanner("RDY");
           return;
       }
@@ -251,7 +258,7 @@ void loop()
 
     /* ---------- ERROR ---------- */
     case State::ERROR:
-      delay(5000);
+      delay(7000);
       state = State::ALIGN;
       tStateEntry = nowMs;
       DisplayDriver::blankAll(); 
